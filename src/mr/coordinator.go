@@ -1,29 +1,54 @@
 package mr
 
-import "log"
+import (
+	"log"
+	"time"
+)
 import "net"
 import "os"
 import "net/rpc"
 import "net/http"
 
+type Status int
+
+const (
+	Idle Status = iota
+	Running
+	Complete
+)
+
+type MapTask struct {
+	id       int
+	filename string
+	status   Status
+	started  time.Time
+}
 
 type Coordinator struct {
-	// Your definitions here.
-
+	buckets   int
+	mapTasks  []MapTask
+	mapTaskCh chan MapTask
 }
 
 // Your code here -- RPC handlers for the worker to call.
 
 //
-// an example RPC handler.
+// Request Work RPC handler.
 //
-// the RPC argument and reply types are defined in rpc.go.
-//
-func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
+func (c *Coordinator) RequestWork(args *RequestWorkArgs, reply *RequestWorkReply) error {
+	log.Println("RPC RequestWork Received")
+	log.Println("Checking if any tasks are available")
+
+	mapTask := <-c.mapTaskCh
+	log.Printf("Map Task: %d found, filename: %s\n", mapTask.id, mapTask.filename)
+
+	reply.Type = Map
+	reply.TaskId = mapTask.id
+	reply.FileName = mapTask.filename
+	reply.Buckets = c.buckets
+
 	return nil
 }
-
 
 //
 // start a thread that listens for RPCs from worker.go
@@ -50,7 +75,6 @@ func (c *Coordinator) Done() bool {
 
 	// Your code here.
 
-
 	return ret
 }
 
@@ -60,10 +84,17 @@ func (c *Coordinator) Done() bool {
 // nReduce is the number of reduce tasks to use.
 //
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
-	c := Coordinator{}
+	c := Coordinator{buckets: nReduce, mapTaskCh: make(chan MapTask, len(files))}
 
-	// Your code here.
+	go func() {
+		for i, file := range files {
+			mapTask := MapTask{id: i, filename: file}
+			c.mapTasks = append(c.mapTasks, mapTask)
 
+			log.Printf("Adding map task: %d, input file: %s\n", mapTask.id, mapTask.filename)
+			c.mapTaskCh <- mapTask
+		}
+	}()
 
 	c.server()
 	return &c
