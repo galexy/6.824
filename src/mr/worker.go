@@ -43,29 +43,32 @@ func Worker(mapf func(string, string) []KeyValue,
 		switch reply.Type {
 		case Map:
 			log.Printf("Received map task id: %d, filename: %s\n", reply.TaskId, reply.FileName)
-			if err := runMapTask(mapf, reply.TaskId, reply.FileName, reply.Buckets); err != nil {
+			filenames, err := runMapTask(mapf, reply.TaskId, reply.FileName, reply.Buckets)
+			if err != nil {
 				log.Fatalf("Map task failed: %v", err)
 				return
 			}
+			CallCompleteTask(Map, reply.TaskId, filenames)
 		}
 
 	}
 }
 
-func runMapTask(mapf func(string, string) []KeyValue, taskId int, filename string, buckets int) error {
+func runMapTask(mapf func(string, string) []KeyValue, taskId int, filename string, buckets int) ([]string, error) {
 	log.Printf("Running map task id: %d, filename: %s\n", taskId, filename)
 
 	var kva []KeyValue
 	var err error
 	if kva, err = mapInput(mapf, filename); err != nil {
-		return err
+		return nil, err
 	}
 
-	if err = storeIntermediate(kva, taskId, buckets); err != nil {
-		return err
+	var filenames []string
+	if filenames, err = storeIntermediate(kva, taskId, buckets); err != nil {
+		return nil, err
 	}
 
-	return nil
+	return filenames, nil
 }
 
 func mapInput(mapf func(string, string) []KeyValue, filename string) ([]KeyValue, error) {
@@ -87,13 +90,15 @@ func mapInput(mapf func(string, string) []KeyValue, filename string) ([]KeyValue
 	return mapf(filename, string(content)), nil
 }
 
-func storeIntermediate(results []KeyValue, taskId, buckets int) error {
+func storeIntermediate(results []KeyValue, taskId, buckets int) ([]string, error) {
 	files, err := createIntermediateFiles(buckets, taskId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	var filenames []string
 	for _, file := range files {
+		filenames = append(filenames, file.Name())
 		defer file.Close()
 	}
 
@@ -112,12 +117,12 @@ func storeIntermediate(results []KeyValue, taskId, buckets int) error {
 
 		if err != nil {
 			file := files[bucket]
-			return fmt.Errorf("failed to write map key/value to intermediate output %s: %v",
+			return nil, fmt.Errorf("failed to write map key/value to intermediate output %s: %v",
 				file.Name(), err)
 		}
 	}
 
-	return nil
+	return filenames, nil
 }
 
 func createIntermediateFiles(buckets int, taskId int) ([]*os.File, error) {
@@ -156,6 +161,13 @@ func CallRequestWork() (RequestWorkReply, bool) {
 		fmt.Printf("call failed!\n")
 		return reply, false
 	}
+}
+
+func CallCompleteTask(taskType TaskType, taskId int, filenames []string) bool {
+	args := CompleteTaskArgs{Type: taskType, TaskId: taskId, FileNames: filenames}
+	reply := CompleteTaskReply{}
+
+	return call("Coordinator.CompleteTask", &args, &reply)
 }
 
 //

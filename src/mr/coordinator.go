@@ -2,12 +2,12 @@ package mr
 
 import (
 	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"os"
 	"time"
 )
-import "net"
-import "os"
-import "net/rpc"
-import "net/http"
 
 type Status int
 
@@ -25,9 +25,11 @@ type MapTask struct {
 }
 
 type Coordinator struct {
-	buckets   int
-	mapTasks  []MapTask
-	mapTaskCh chan MapTask
+	buckets    int
+	mapTasks   []MapTask
+	mapTaskCh  chan MapTask
+	completeCh chan CompleteTaskArgs
+	doneCh     chan bool
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -46,6 +48,13 @@ func (c *Coordinator) RequestWork(args *RequestWorkArgs, reply *RequestWorkReply
 	reply.TaskId = mapTask.id
 	reply.FileName = mapTask.filename
 	reply.Buckets = c.buckets
+
+	return nil
+}
+
+func (c *Coordinator) CompleteTask(args *CompleteTaskArgs, reply *CompleteTaskReply) error {
+	log.Println("RPC CompleteTask received for Task Type: %d, Id: %d", args.Type, args.TaskId)
+	c.completeCh <- *args
 
 	return nil
 }
@@ -71,11 +80,15 @@ func (c *Coordinator) server() {
 // if the entire job has finished.
 //
 func (c *Coordinator) Done() bool {
-	ret := false
-
-	// Your code here.
-
-	return ret
+	log.Println("Checking if coordinator is done")
+	select {
+	case done := <-c.doneCh:
+		log.Println("Yep... done")
+		return done
+	default:
+		log.Println("Nope.. check again")
+		return false
+	}
 }
 
 //
@@ -84,7 +97,14 @@ func (c *Coordinator) Done() bool {
 // nReduce is the number of reduce tasks to use.
 //
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
-	c := Coordinator{buckets: nReduce, mapTaskCh: make(chan MapTask, len(files))}
+	numMapTasks := len(files)
+
+	c := Coordinator{
+		buckets:    nReduce,
+		mapTaskCh:  make(chan MapTask, numMapTasks),
+		completeCh: make(chan CompleteTaskArgs),
+		doneCh:     make(chan bool),
+	}
 
 	go func() {
 		for i, file := range files {
@@ -94,6 +114,20 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 			log.Printf("Adding map task: %d, input file: %s\n", mapTask.id, mapTask.filename)
 			c.mapTaskCh <- mapTask
 		}
+
+		var n = numMapTasks
+		for n > 0 {
+			select {
+			case completeArgs := <-c.completeCh:
+				log.Printf("Received complete for task %d\n", completeArgs.TaskId)
+				n--
+			}
+		}
+
+		log.Printf("All %d map tasks have completed.\n", numMapTasks)
+		log.Println("Sending signal to done channel")
+		c.doneCh <- true
+		log.Printf("Done signal consumed")
 	}()
 
 	c.server()

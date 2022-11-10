@@ -26,6 +26,15 @@ type RequestWorkReply struct {
 	Buckets  int
 }
 
+type CompleteTaskArgs struct {
+	Type      TaskType
+	TaskId    int
+	FileNames []string
+}
+
+type CompleteTaskReply struct {
+}
+
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
 // Can't use the current directory since
