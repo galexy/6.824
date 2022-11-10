@@ -3,8 +3,10 @@ package mr
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"sort"
 )
 import "log"
 import "net/rpc"
@@ -17,6 +19,14 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
+
+// for sorting by key.
+type ByKey []KeyValue
+
+// for sorting by key.
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 //
 // use ihash(key) % NReduce to choose the reduce
@@ -31,8 +41,7 @@ func ihash(key string) int {
 //
 // main/mrworker.go calls this function.
 //
-func Worker(mapf func(string, string) []KeyValue,
-	reducef func(string, []string) string) {
+func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 
 	for {
 		reply, ok := CallRequestWork()
@@ -42,20 +51,28 @@ func Worker(mapf func(string, string) []KeyValue,
 
 		switch reply.Type {
 		case Map:
-			log.Printf("Received map task id: %d, filename: %s\n", reply.TaskId, reply.FileName)
-			filenames, err := runMapTask(mapf, reply.TaskId, reply.FileName, reply.Buckets)
+			log.Printf("Received map task id: %d, inputFiles: %s\n", reply.TaskId, reply.FileNames)
+			filenames, err := runMapTask(mapf, reply.TaskId, reply.FileNames[0], reply.Buckets)
 			if err != nil {
 				log.Fatalf("Map task failed: %v", err)
 				return
 			}
 			CallCompleteTask(Map, reply.TaskId, filenames)
-		}
 
+		case Reduce:
+			log.Printf("Received reduce task id: %d", reply.TaskId)
+			outputFile, err := runReduceTask(reducef, reply.TaskId, reply.FileNames)
+			if err != nil {
+				log.Fatalf("Reduce task failed: %v", err)
+				return
+			}
+			CallCompleteTask(Reduce, reply.TaskId, []string{outputFile})
+		}
 	}
 }
 
 func runMapTask(mapf func(string, string) []KeyValue, taskId int, filename string, buckets int) ([]string, error) {
-	log.Printf("Running map task id: %d, filename: %s\n", taskId, filename)
+	log.Printf("Running map task id: %d, inputFiles: %s\n", taskId, filename)
 
 	var kva []KeyValue
 	var err error
@@ -69,6 +86,46 @@ func runMapTask(mapf func(string, string) []KeyValue, taskId int, filename strin
 	}
 
 	return filenames, nil
+}
+
+func runReduceTask(reducef func(string, []string) string, taskId int, files []string) (string, error) {
+	oname := fmt.Sprintf("mr-out-%d", taskId)
+	ofile, err := os.Create(oname)
+	if err != nil {
+		return "", fmt.Errorf("reduce task: %d, failed to create output file: %v", taskId, err)
+	}
+	defer ofile.Close()
+
+	intermediate, err := loadIntermediate(files)
+	if err != nil {
+		return "", fmt.Errorf("reduce task: %d, failed to load intermediate files: %v", taskId, err)
+	}
+
+	sort.Sort(ByKey(intermediate))
+
+	//
+	// call Reduce on each distinct key in intermediate[],
+	// and print the result to mr-out-0.
+	//
+	i := 0
+	for i < len(intermediate) {
+		j := i + 1
+		for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+			j++
+		}
+		values := []string{}
+		for k := i; k < j; k++ {
+			values = append(values, intermediate[k].Value)
+		}
+		output := reducef(intermediate[i].Key, values)
+
+		// this is the correct format for each line of Reduce output.
+		fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
+
+		i = j
+	}
+
+	return oname, nil
 }
 
 func mapInput(mapf func(string, string) []KeyValue, filename string) ([]KeyValue, error) {
@@ -123,6 +180,29 @@ func storeIntermediate(results []KeyValue, taskId, buckets int) ([]string, error
 	}
 
 	return filenames, nil
+}
+
+func loadIntermediate(filenames []string) ([]KeyValue, error) {
+	var results []KeyValue
+	for _, filename := range filenames {
+		file, err := os.Open(filename)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load intermediate file: %v", err)
+		}
+		defer file.Close()
+
+		decoder := json.NewDecoder(file)
+		for {
+			var kv KeyValue
+			if err := decoder.Decode(&kv); err == io.EOF {
+				break
+			} else if err != nil {
+				return nil, fmt.Errorf("failed to decode intermediate file: %v", err)
+			}
+			results = append(results, kv)
+		}
+	}
+	return results, nil
 }
 
 func createIntermediateFiles(buckets int, taskId int) ([]*os.File, error) {

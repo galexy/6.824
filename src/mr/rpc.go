@@ -6,7 +6,10 @@ package mr
 // remember to capitalize all names.
 //
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 import "strconv"
 
 type TaskType int
@@ -16,14 +19,25 @@ const (
 	Reduce
 )
 
+func (t TaskType) String() string {
+	switch t {
+	case Map:
+		return "Map"
+	case Reduce:
+		return "Reduce"
+	default:
+		return fmt.Sprintf("%d", int(t))
+	}
+}
+
 type RequestWorkArgs struct {
 }
 
 type RequestWorkReply struct {
-	Type     TaskType
-	TaskId   int
-	FileName string
-	Buckets  int
+	Type      TaskType
+	TaskId    int
+	FileNames []string
+	Buckets   int
 }
 
 type CompleteTaskArgs struct {
