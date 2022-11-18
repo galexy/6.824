@@ -26,7 +26,6 @@ import (
 	"6.824/labrpc"
 )
 
-
 //
 // as each Raft peer becomes aware that successive log entries are
 // committed, the peer should send an ApplyMsg to the service (or
@@ -54,11 +53,22 @@ type ApplyMsg struct {
 // A Go object implementing a single Raft peer.
 //
 type Raft struct {
-	mu        sync.Mutex          // Lock to protect shared access to this peer's state
-	peers     []*labrpc.ClientEnd // RPC end points of all peers
-	persister *Persister          // Object to hold this peer's persisted state
-	me        int                 // this peer's index into peers[]
-	dead      int32               // set by Kill()
+	// R/O Thread-Safe data
+	peers             []*labrpc.ClientEnd // RPC end points of all peers
+	me                int                 // this peer's index into peers[]
+	electionTimeout   int
+	heartBeatInterval int
+
+	// Shared data
+	mu          sync.Mutex // Lock to protect shared access to this peer's state
+	persister   *Persister // Object to hold this peer's persisted state
+	currentTerm int        // Latest term server has seen
+	votedFor    int        // Candidate that received vote in current term, -1 is null
+	commitIndex int        // Index of higest log entry known
+	lastApplied int        // Index of higest log entry applied to state machine
+	nextIndex   []int      // Leader - for each peer, index of the next log entry to send
+	matchIndex  []int      // Leader - for each peer, index of the highest log entry known to be replicated
+	dead        int32      // set by Kill()
 
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
@@ -92,7 +102,6 @@ func (rf *Raft) persist() {
 	// rf.persister.SaveRaftState(data)
 }
 
-
 //
 // restore previously persisted state.
 //
@@ -115,7 +124,6 @@ func (rf *Raft) readPersist(data []byte) {
 	// }
 }
 
-
 //
 // A service wants to switch to snapshot.  Only do so if Raft hasn't
 // have more recent info since it communicate the snapshot on applyCh.
@@ -136,13 +144,13 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 
 }
 
-
 //
 // example RequestVote RPC arguments structure.
 // field names must start with capital letters!
 //
 type RequestVoteArgs struct {
-	// Your data here (2A, 2B).
+	Term        int // Candidate's Term
+	CandidateId int // ID of candidate requesting vote
 }
 
 //
@@ -150,7 +158,8 @@ type RequestVoteArgs struct {
 // field names must start with capital letters!
 //
 type RequestVoteReply struct {
-	// Your data here (2A).
+	Term        int  // Current Term of server - for candidate to update itself
+	VoteGranted bool // Reply on whether candidate was granted vote
 }
 
 //
@@ -194,7 +203,6 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	return ok
 }
 
-
 //
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next command to be appended to Raft's log. if this
@@ -215,7 +223,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	isLeader := true
 
 	// Your code here (2B).
-
 
 	return index, term, isLeader
 }
@@ -278,7 +285,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
-
 
 	return rf
 }
