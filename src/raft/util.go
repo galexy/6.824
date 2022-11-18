@@ -6,6 +6,7 @@ import (
 )
 
 var debug = false
+var indent = false
 
 func init() {
 	//debugVerbosity = getVerbosity()
@@ -18,11 +19,14 @@ func init() {
 func DPrintf(procId int, topic string, format string, a ...interface{}) (n int, err error) {
 	if debug {
 		prefix := ""
-		for i := 0; i < procId; i++ {
-			prefix = prefix + "                                "
+
+		if indent {
+			for i := 0; i <= procId; i++ {
+				prefix = prefix + "\t|"
+			}
 		}
 
-		prefix = prefix + fmt.Sprintf("[S%d][%v] -", procId, string(topic))
+		prefix = prefix + fmt.Sprintf("- [%v] S%d ", string(topic), procId)
 		format = prefix + format
 		log.Printf(format, a...)
 	}
