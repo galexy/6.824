@@ -1,0 +1,413 @@
+Test (2A): initial election ...
+12:41:20.381275                                 [S1][TICKER] -Election Timeout (578ms) elapsed
+12:41:20.381510                                 [S1][FOLLOW] -Converting to Candidate
+12:41:20.381295 [S0][TICKER] -Election Timeout (578ms) elapsed
+12:41:20.381550 [S0][FOLLOW] -Converting to Candidate
+12:41:20.381529                                 [S1][CANDID] -Starting Election Term: 1
+12:41:20.381567 [S0][CANDID] -Starting Election Term: 1
+12:41:20.381735 [S0][CANDID] -Request vote from S1 Term: 1
+12:41:20.381741                                 [S1][CANDID] -Request vote from S2 Term: 1
+12:41:20.381758 [S0][CANDID] -Request vote from S2 Term: 1
+12:41:20.381768                                 [S1][CANDID] -Request vote from S0 Term: 1
+12:41:20.382642                                 [S1][SRVRPC] -RPC Request: RequestVote S0, Term:1)
+12:41:20.382663                                                                 [S2][SRVRPC] -RPC Request: RequestVote S1, Term:1)
+12:41:20.382694                                                                 [S2][_TERM_] -Term is higher (1 > 0)
+12:41:20.382715                                                                 [S2][_TERM_] -Converting to follower and resetting votedFor
+12:41:20.382665 [S0][SRVRPC] -RPC Request: RequestVote S1, Term:1)
+12:41:20.382670                                 [S1][CANDID] -Denying RequestVote from S0 for Term: 1, waiting for election
+12:41:20.382729                                                                 [S2][FOLLOW] -Vote Requested from S1 for term: 1
+12:41:20.382817                                                                 [S2][FOLLOW] -Granting vote for S1 for Term: 1
+12:41:20.382753 [S0][CANDID] -Denying RequestVote from S1 for Term: 1, waiting for election
+12:41:20.382882                                                                 [S2][SRVRPC] -RPC Request: RequestVote S0, Term:1)
+12:41:20.382905                                                                 [S2][FOLLOW] -Vote Requested from S0 for term: 1
+12:41:20.382919                                                                 [S2][FOLLOW] -Already voted for S1 for Term: 1
+12:41:20.382998                                 [S1][SRVRPC] -RPC Response from 2: RequestVote(S1, Term:1) -> (Term:1, true)
+12:41:20.383004 [S0][SRVRPC] -RPC Response from 1: RequestVote(S0, Term:1) -> (Term:1, false)
+12:41:20.383038 [S0][CANDID] -Denied vote from S1 for term: 1
+12:41:20.383049                                 [S1][SRVRPC] -RPC Response from 0: RequestVote(S1, Term:1) -> (Term:1, false)
+12:41:20.383023                                 [S1][CANDID] -Received vote from S2 for term: 1
+12:41:20.383080                                 [S1][CANDID] -Received major votes. Promoting to leader
+12:41:20.383123 [S0][SRVRPC] -RPC Response from 2: RequestVote(S0, Term:1) -> (Term:1, false)
+12:41:20.383145 [S0][CANDID] -Denied vote from S2 for term: 1
+12:41:20.383145                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:20.383162                                 [S1][LEADER] -Ignoring RequestVote Response from S0 for Term: 1. Already Leader
+12:41:20.383197                                 [S1][LEADER] -Sending Heartbeat
+12:41:20.383642 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.383662 [S0][CANDID] -AppendEntries received from new leader. Converting to follower.
+12:41:20.383679 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.383650                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.383710                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.483416                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:20.483454                                 [S1][LEADER] -Sending Heartbeat
+12:41:20.483911                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.483932                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.483940 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.484011 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.583679                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:20.583703                                 [S1][LEADER] -Sending Heartbeat
+12:41:20.584069 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.584089 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.584117                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.584141                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.684218                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:20.684789                                 [S1][LEADER] -Sending Heartbeat
+12:41:20.686757                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.687925                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.689453 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.689559 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.785490                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:20.785593                                 [S1][LEADER] -Sending Heartbeat
+12:41:20.786904 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.786975 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.786986                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.787128                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.885952                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:20.885985                                 [S1][LEADER] -Sending Heartbeat
+12:41:20.886516 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.886536 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.886661                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.886703                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.960577                                 [S1][TICKER] -Election Timeout (578ms) elapsed
+12:41:20.986356                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:20.986397                                 [S1][LEADER] -Sending Heartbeat
+12:41:20.986885 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.986898                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:20.986927                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:20.986905 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.086675                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.086718                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.087227 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.087241                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.087294                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.087258 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.186888                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.186936                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.187451 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.187485 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.187461                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.187543                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.287427                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.287484                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.287940 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.287960 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.287999                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.288030                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.387902                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.388073                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.389268 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.389300                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.389423                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.389332 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.488566                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.488741                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.490054 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.490124                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.490131 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.490219                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.540979                                 [S1][TICKER] -Election Timeout (578ms) elapsed
+12:41:21.589267                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.589347                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.589973 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.589986                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.590028 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.590071                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.689796                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.689888                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.690650 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.690675                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.690695 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.690731                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.790212                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.790491                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.791575 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.791599                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.791689                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.791640 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.890941                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.891219                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.893343 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.893352                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.893505 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.893613                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.991662                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:21.991900                                 [S1][LEADER] -Sending Heartbeat
+12:41:21.993496 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.993637 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:21.993720                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:21.993810                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.092300                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.092544                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.094152 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.094285 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.094153                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.094495                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.121931                                 [S1][TICKER] -Election Timeout (578ms) elapsed
+12:41:22.193100                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.193192                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.193668 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.193690 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.193693                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.193754                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.293618                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.293665                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.294123                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.294152                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.294123 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.294245 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.393997                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.394043                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.394502                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.394543                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.394505 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.394583 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.494343                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.494390                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.494820                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.494855                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.494822 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.494933 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.594570                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.594600                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.594961                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.594980                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.594963 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.595023 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.695128                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.695366                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.696849 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.696951 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.696970                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.697096                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.702177                                 [S1][TICKER] -Election Timeout (578ms) elapsed
+12:41:22.795991                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.796084                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.796723                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.796751 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.796788 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.796765                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.896473                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.896653                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.897941                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.897957 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.898044                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.898135 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.997216                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:22.997440                                 [S1][LEADER] -Sending Heartbeat
+12:41:22.998799 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.998881 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:22.998832                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:22.999050                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:23.097884                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:23.098117                                 [S1][LEADER] -Sending Heartbeat
+12:41:23.099805                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:23.099932                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:23.101788 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:23.101906 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:23.198580                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:23.198805                                 [S1][LEADER] -Sending Heartbeat
+12:41:23.200203 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:23.200333 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:23.200236                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:23.200480                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:23.281848                                 [S1][TICKER] -Election Timeout (578ms) elapsed
+12:41:23.299367                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:23.299498                                 [S1][LEADER] -Sending Heartbeat
+12:41:23.300972 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:23.301246 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:23.300985                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:23.301361                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:23.399913                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:23.400151                                 [S1][LEADER] -Sending Heartbeat
+12:41:23.401711 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:23.401977 [S0][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+12:41:23.402060                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:1)
+12:41:23.402125                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 1. Replying true.
+  ... Passed --   3.6  3   66    8186    0
+Test (2A): election after network failure ...
+12:41:23.967272 [S0][TICKER] -Election Timeout (539ms) elapsed
+12:41:23.967446 [S0][FOLLOW] -Converting to Candidate
+12:41:23.967534 [S0][CANDID] -Starting Election Term: 1
+12:41:23.967921 [S0][CANDID] -Request vote from S1 Term: 1
+12:41:23.967942 [S0][CANDID] -Request vote from S2 Term: 1
+12:41:23.969324                                                                 [S2][SRVRPC] -RPC Request: RequestVote S0, Term:1)
+12:41:23.969373                                 [S1][SRVRPC] -RPC Request: RequestVote S0, Term:1)
+12:41:23.969375                                                                 [S2][_TERM_] -Term is higher (1 > 0)
+12:41:23.969461                                                                 [S2][_TERM_] -Converting to follower and resetting votedFor
+12:41:23.969506                                                                 [S2][FOLLOW] -Vote Requested from S0 for term: 1
+12:41:23.969421                                 [S1][_TERM_] -Term is higher (1 > 0)
+12:41:23.969587                                 [S1][_TERM_] -Converting to follower and resetting votedFor
+12:41:23.969545                                                                 [S2][FOLLOW] -Granting vote for S0 for Term: 1
+12:41:23.969627                                 [S1][FOLLOW] -Vote Requested from S0 for term: 1
+12:41:23.969704                                 [S1][FOLLOW] -Granting vote for S0 for Term: 1
+12:41:23.970113 [S0][SRVRPC] -RPC Response from 2: RequestVote(S0, Term:1) -> (Term:1, true)
+12:41:23.970153 [S0][CANDID] -Received vote from S2 for term: 1
+12:41:23.970172 [S0][SRVRPC] -RPC Response from 1: RequestVote(S0, Term:1) -> (Term:1, true)
+12:41:23.970181 [S0][CANDID] -Received major votes. Promoting to leader
+12:41:23.970325 [S0][LEADER] -Ignoring RequestVote Response from S1 for Term: 1. Already Leader
+12:41:23.970332 [S0][LEADER] -Wakeup for Heartbeat
+12:41:23.970393 [S0][LEADER] -Sending Heartbeat
+12:41:23.971151                                 [S1][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:23.971178                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:23.971257                                                                 [S2][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:23.971196                                 [S1][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:24.070837 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.071016 [S0][LEADER] -Sending Heartbeat
+12:41:24.072626                                 [S1][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:24.072684                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:24.072717                                 [S1][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:24.072778                                                                 [S2][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:24.171710 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.171834 [S0][LEADER] -Sending Heartbeat
+12:41:24.173257                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:24.173327                                 [S1][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:24.173341                                                                 [S2][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:24.173415                                 [S1][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:24.272505 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.272623 [S0][LEADER] -Sending Heartbeat
+12:41:24.273978                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:24.273980                                 [S1][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:24.274087                                                                 [S2][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:24.274193                                 [S1][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:24.373056 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.373096 [S0][LEADER] -Sending Heartbeat
+12:41:24.373531                                 [S1][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:24.373546                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S0, Term:1)
+12:41:24.373590                                                                 [S2][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:24.373563                                 [S1][FOLLOW] -AppendEntries from S0 for Term: 1. Replying true.
+12:41:24.473275 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.473331 [S0][LEADER] -Sending Heartbeat
+12:41:24.509573 [S0][TICKER] -Election Timeout (539ms) elapsed
+12:41:24.573824 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.573860 [S0][LEADER] -Sending Heartbeat
+12:41:24.674305 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.674508 [S0][LEADER] -Sending Heartbeat
+12:41:24.775280 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.775322 [S0][LEADER] -Sending Heartbeat
+12:41:24.875557 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.875598 [S0][LEADER] -Sending Heartbeat
+12:41:24.959481                                 [S1][TICKER] -Election Timeout (585ms) elapsed
+12:41:24.959518                                 [S1][FOLLOW] -Converting to Candidate
+12:41:24.959536                                 [S1][CANDID] -Starting Election Term: 2
+12:41:24.959627                                 [S1][CANDID] -Request vote from S0 Term: 2
+12:41:24.959629                                 [S1][CANDID] -Request vote from S2 Term: 2
+12:41:24.960030                                                                 [S2][SRVRPC] -RPC Request: RequestVote S1, Term:2)
+12:41:24.960050                                                                 [S2][_TERM_] -Term is higher (2 > 1)
+12:41:24.960065                                                                 [S2][_TERM_] -Converting to follower and resetting votedFor
+12:41:24.960080                                                                 [S2][FOLLOW] -Vote Requested from S1 for term: 2
+12:41:24.960093                                                                 [S2][FOLLOW] -Granting vote for S1 for Term: 2
+12:41:24.960307                                 [S1][SRVRPC] -RPC Response from 2: RequestVote(S1, Term:2) -> (Term:2, true)
+12:41:24.960330                                 [S1][CANDID] -Received vote from S2 for term: 2
+12:41:24.960348                                 [S1][CANDID] -Received major votes. Promoting to leader
+12:41:24.960417                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:24.960430                                 [S1][LEADER] -Sending Heartbeat
+12:41:24.960893                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:24.960917                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:24.976102 [S0][LEADER] -Wakeup for Heartbeat
+12:41:24.976121 [S0][LEADER] -Sending Heartbeat
+12:41:25.050263 [S0][TICKER] -Election Timeout (539ms) elapsed
+12:41:25.060559                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.060581                                 [S1][LEADER] -Sending Heartbeat
+12:41:25.061173 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.061198 [S0][_TERM_] -Term is higher (2 > 1)
+12:41:25.061209 [S0][_TERM_] -Converting to follower and resetting votedFor
+12:41:25.061177                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.061255                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.061233 [S0][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.076547 [S0][LEADER] -Wakeup for Heartbeat
+12:41:25.076567 [S0][LEADER] -No longer leader. Killing heartbeat.
+12:41:25.161224                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.161359                                 [S1][LEADER] -Sending Heartbeat
+12:41:25.162652 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.162733 [S0][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.162803                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.162891                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.261895                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.262051                                 [S1][LEADER] -Sending Heartbeat
+12:41:25.267450 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.267611 [S0][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.269159                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.269266                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.362661                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.362888                                 [S1][LEADER] -Sending Heartbeat
+12:41:25.364776                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.364920                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.364970 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.365067 [S0][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.410254                                 [S1][SRVRPC] -RPC RequestVote to S0 Failed
+12:41:25.410519                                 [S1][SRVRPC] -RPC Response from 0: RequestVote(S1, Term:2) -> (Term:0, false)
+12:41:25.410613                                 [S1][LEADER] -Ignoring RequestVote Response from S0 for Term: 2. Already Leader
+12:41:25.463499                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.463959                                 [S1][LEADER] -Sending Heartbeat
+12:41:25.465469                                                                 [S2][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.465473 [S0][SRVRPC] -RPC Request: AppendEntries from S1, Term:2)
+12:41:25.465580                                                                 [S2][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.465659 [S0][FOLLOW] -AppendEntries from S1 for Term: 2. Replying true.
+12:41:25.544827                                 [S1][TICKER] -Election Timeout (585ms) elapsed
+12:41:25.565947                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.566107                                 [S1][LEADER] -Sending Heartbeat
+12:41:25.667340                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.667641                                 [S1][LEADER] -Sending Heartbeat
+12:41:25.768370                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.768468                                 [S1][LEADER] -Sending Heartbeat
+12:41:25.868831                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.868955                                 [S1][LEADER] -Sending Heartbeat
+12:41:25.969228                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:25.969266                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.006006 [S0][TICKER] -Election Timeout (539ms) elapsed
+12:41:26.006039 [S0][FOLLOW] -Converting to Candidate
+12:41:26.006054 [S0][CANDID] -Starting Election Term: 3
+12:41:26.006138 [S0][CANDID] -Request vote from S1 Term: 3
+12:41:26.006171 [S0][CANDID] -Request vote from S2 Term: 3
+12:41:26.069758                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.069803                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.130663                                 [S1][TICKER] -Election Timeout (585ms) elapsed
+12:41:26.170229                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.170279                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.198072                                                                 [S2][TICKER] -Election Timeout (731ms) elapsed
+12:41:26.198098                                                                 [S2][FOLLOW] -Converting to Candidate
+12:41:26.198120                                                                 [S2][CANDID] -Starting Election Term: 3
+12:41:26.198200                                                                 [S2][CANDID] -Request vote from S0 Term: 3
+12:41:26.198222                                                                 [S2][CANDID] -Request vote from S1 Term: 3
+12:41:26.270531                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.270557                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.370818                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.370957                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.471506                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.471719                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.545501 [S0][TICKER] -Election Timeout (539ms) elapsed
+12:41:26.545740 [S0][CANDID] -Election Timeout During Term: 3
+12:41:26.545816 [S0][CANDID] -Starting Election Term: 4
+12:41:26.546091 [S0][CANDID] -Request vote from S1 Term: 4
+12:41:26.546244 [S0][CANDID] -Request vote from S2 Term: 4
+12:41:26.572067                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.572267                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.673018                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.673242                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.716847                                 [S1][TICKER] -Election Timeout (585ms) elapsed
+12:41:26.773805                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.774011                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.874806                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.874928                                 [S1][LEADER] -Sending Heartbeat
+12:41:26.931641                                                                 [S2][TICKER] -Election Timeout (731ms) elapsed
+12:41:26.931849                                                                 [S2][CANDID] -Election Timeout During Term: 3
+12:41:26.931919                                                                 [S2][CANDID] -Starting Election Term: 4
+12:41:26.932193                                                                 [S2][CANDID] -Request vote from S0 Term: 4
+12:41:26.932210                                                                 [S2][CANDID] -Request vote from S1 Term: 4
+12:41:26.975201                                 [S1][LEADER] -Wakeup for Heartbeat
+12:41:26.975418                                 [S1][LEADER] -Sending Heartbeat
+12:41:27.036715                                                                 [S2][SRVRPC] -RPC RequestVote to S0 Failed
+12:41:27.036954                                                                 [S2][SRVRPC] -RPC Response from 0: RequestVote(S2, Term:3) -> (Term:0, false)
+12:41:27.037083                                                                 [S2][CANDID] -Received stale vote from S2 for term: (3 < 4). Ignoring.
+12:41:27.047201                                                                 [S2][SRVRPC] -RPC RequestVote to S0 Failed
+12:41:27.047347                                                                 [S2][SRVRPC] -RPC Response from 0: RequestVote(S2, Term:4) -> (Term:0, false)
+panic: Candidate voteResponseReceived, expected terms to all match, currentTerm: 4, argsTerm: 4, reply: 0
+
+goroutine 416 [running]:
+6.824/raft.(*Candidate).voteResponseReceived(0xc000484720, 0x0, 0xc0001fdd50, 0xc0001fdd60)
+	/Users/galex/src/mit/6.824/src/raft/raft.go:519 +0x7b0
+6.824/raft.(*Candidate).startElection.func1(0xc000484720, 0xc00014a750, 0x0, 0x4, 0x2)
+	/Users/galex/src/mit/6.824/src/raft/raft.go:489 +0x4b8
+created by 6.824/raft.(*Candidate).startElection
+	/Users/galex/src/mit/6.824/src/raft/raft.go:472 +0x41c
+exit status 2
+FAIL	6.824/raft	7.357s

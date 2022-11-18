@@ -1,8 +1,11 @@
 package raft
 
 import (
+	"fmt"
 	"log"
 )
+
+var debug = false
 
 func init() {
 	//debugVerbosity = getVerbosity()
@@ -12,7 +15,16 @@ func init() {
 	log.SetFlags(log.Flags() | log.Lmicroseconds)
 }
 
-func DPrintf(format string, a ...interface{}) (n int, err error) {
-	log.Printf(format, a...)
+func DPrintf(procId int, topic string, format string, a ...interface{}) (n int, err error) {
+	if debug {
+		prefix := ""
+		for i := 0; i < procId; i++ {
+			prefix = prefix + "                                "
+		}
+
+		prefix = prefix + fmt.Sprintf("[S%d][%v] -", procId, string(topic))
+		format = prefix + format
+		log.Printf(format, a...)
+	}
 	return
 }
