@@ -1,13 +1,18 @@
 package raft
 
-import "log"
+import (
+	"log"
+)
 
-// Debugging
-const Debug = false
+func init() {
+	//debugVerbosity = getVerbosity()
+	//debugStart = time.Now()
+
+	log.SetFlags(log.Flags() &^ (log.Ldate))
+	log.SetFlags(log.Flags() | log.Lmicroseconds)
+}
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
-	if Debug {
-		log.Printf(format, a...)
-	}
+	log.Printf(format, a...)
 	return
 }

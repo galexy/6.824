@@ -18,12 +18,19 @@ package raft
 //
 
 import (
+	"math/rand"
+	"time"
+
 	//	"bytes"
 	"sync"
 	"sync/atomic"
 
 	//	"6.824/labgob"
 	"6.824/labrpc"
+)
+
+const (
+	cmpTicker = "TICK"
 )
 
 //
@@ -56,19 +63,22 @@ type Raft struct {
 	// R/O Thread-Safe data
 	peers             []*labrpc.ClientEnd // RPC end points of all peers
 	me                int                 // this peer's index into peers[]
-	electionTimeout   int
+	electionTimeout   time.Duration
 	heartBeatInterval int
 
+	// Accessed atomically
+	dead int32 // set by Kill()
+
 	// Shared data
-	mu          sync.Mutex // Lock to protect shared access to this peer's state
-	persister   *Persister // Object to hold this peer's persisted state
-	currentTerm int        // Latest term server has seen
-	votedFor    int        // Candidate that received vote in current term, -1 is null
-	commitIndex int        // Index of higest log entry known
-	lastApplied int        // Index of higest log entry applied to state machine
-	nextIndex   []int      // Leader - for each peer, index of the next log entry to send
-	matchIndex  []int      // Leader - for each peer, index of the highest log entry known to be replicated
-	dead        int32      // set by Kill()
+	mu                  sync.Mutex // Lock to protect shared access to this peer's state
+	nextElectionTimeout time.Time  // Next election timeout
+	persister           *Persister // Object to hold this peer's persisted state
+	currentTerm         int        // Latest term server has seen
+	votedFor            int        // Candidate that received vote in current term, -1 is null
+	commitIndex         int        // Index of higest log entry known
+	lastApplied         int        // Index of higest log entry applied to state machine
+	nextIndex           []int      // Leader - for each peer, index of the next log entry to send
+	matchIndex          []int      // Leader - for each peer, index of the highest log entry known to be replicated
 
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
@@ -252,12 +262,20 @@ func (rf *Raft) killed() bool {
 // heartsbeats recently.
 func (rf *Raft) ticker() {
 	for rf.killed() == false {
-
-		// Your code here to check if a leader election should
-		// be started and to randomize sleeping time using
-		// time.Sleep().
-
+		time.Sleep(3 * time.Millisecond) // sleep for short period
+		rf.checkElectionTimeout(time.Now())
 	}
+}
+
+func (rf *Raft) checkElectionTimeout(now time.Time) {
+	rf.mu.Lock()
+	if now.After(rf.nextElectionTimeout) {
+		DPrintf("[S%d][%s] - Election Timeout (%v) elapsed", rf.me, cmpTicker, rf.electionTimeout)
+
+		// Update the next timeout
+		rf.nextElectionTimeout = now.Add(rf.electionTimeout)
+	}
+	rf.mu.Unlock()
 }
 
 //
@@ -278,7 +296,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.persister = persister
 	rf.me = me
 
-	// Your initialization code here (2A, 2B, 2C).
+	// Initialize timeouts
+	rf.electionTimeout = time.Duration(rand.Intn(300)+500) * time.Millisecond
+	rf.heartBeatInterval = 110
+	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
