@@ -30,7 +30,7 @@ func TestInitialElection2A(t *testing.T) {
 	cfg.checkOneLeader()
 
 	// sleep a bit to avoid racing with followers learning of the
-	// election, then check that all peers agree on the term.
+	// election, then check that all peerClients agree on the term.
 	time.Sleep(50 * time.Millisecond)
 	term1 := cfg.checkTerms()
 	if term1 < 1 {
@@ -415,7 +415,7 @@ loop:
 			cmd := cfg.wait(index, servers, term)
 			if ix, ok := cmd.(int); ok {
 				if ix == -1 {
-					// peers have moved on to later terms
+					// peerClients have moved on to later terms
 					// so we can't expect all Start()s to
 					// have succeeded
 					failed = true
@@ -1041,7 +1041,7 @@ func internalChurn(t *testing.T, unreliable bool) {
 			}
 		}
 
-		// Make crash/restart infrequent enough that the peers can often
+		// Make crash/restart infrequent enough that the peerClients can often
 		// keep up, but not so infrequent that everything has settled
 		// down from one change to the next. Pick a value smaller than
 		// the election timeout, but not hugely smaller.

@@ -18,7 +18,6 @@ package raft
 //
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -62,13 +61,17 @@ type ApplyMsg struct {
 	SnapshotIndex int
 }
 
-type ServerState interface {
+type ServerStateMachine interface {
 	isLeader() bool
-	electionTimeoutElapsed() ServerState
-	requestVoteReceived(args *RequestVoteArgs, reply *RequestVoteReply) ServerState
-	voteResponseReceived(serverId int, args *RequestVoteArgs, reply *RequestVoteReply) ServerState
-	appendEntriesReceived(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerState
-	shouldRetryRequestVote(args *RequestVoteArgs) bool
+	processElectionTimeout() ServerStateMachine
+
+	processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
+	shouldRetryFailedRequestVote(args *RequestVoteArgs) bool
+	processRequestVoteResponse(serverId int, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
+
+	processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
+	shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool
+	processAppendEntriesResponse(serverId int, args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
 }
 
 //
@@ -76,8 +79,8 @@ type ServerState interface {
 //
 type Raft struct {
 	// R/O Thread-Safe data
-	peers             []*labrpc.ClientEnd // RPC end points of all peers
-	me                int                 // this peer's index into peers[]
+	peers             []*Peer // Peer nodes that encapsulates RPC endpoints
+	me                int     // this peer's index into peers[]
 	electionTimeout   time.Duration
 	heartBeatInterval int
 
@@ -85,15 +88,15 @@ type Raft struct {
 	dead int32 // set by Kill()
 
 	// Shared data
-	mu                  sync.Mutex  // Lock to protect shared access to this peer's state
-	nextElectionTimeout time.Time   // Next election timeout
-	serverState         ServerState // Follower, Candidate, Leader State Logic
-	persister           *Persister  // Object to hold this peer's persisted state
-	currentTerm         int         // Latest term server has seen
-	votedFor            int         // Candidate that received vote in current term, -1 is null
-	commitIndex         int         // Index of highest log entry known
-	lastApplied         int         // Index of highest log entry applied to state machine
+	mu                  sync.Mutex         // Lock to protect shared access to this peer's state
+	nextElectionTimeout time.Time          // Next election timeout
+	serverStateMachine  ServerStateMachine // Follower, Candidate, Leader State Logic
+	persister           *Persister         // Object to hold this peer's persisted state
+	currentTerm         int                // Latest term server has seen
+	votedFor            int                // Candidate that received vote in current term, -1 is null
 
+	commitIndex int // Index of highest log entry known
+	lastApplied int // Index of highest log entry applied to state machine
 }
 
 // The ticker go routine starts a new election if this peer hasn't received
@@ -107,7 +110,7 @@ func (rf *Raft) ticker() {
 		if now.After(rf.nextElectionTimeout) {
 			DPrintf(rf.me, cmpTicker, "Election Timeout (%v) elapsed", rf.electionTimeout)
 
-			rf.serverState = rf.serverState.electionTimeoutElapsed()
+			rf.serverStateMachine = rf.serverStateMachine.processElectionTimeout()
 		}
 		rf.mu.Unlock()
 	}
@@ -118,9 +121,9 @@ func (rf *Raft) resetTimer() {
 	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
 }
 
-func (rf *Raft) checkTerm(serverId, term int) ServerState {
+func (rf *Raft) checkTerm(serverId, term int) ServerStateMachine {
 	if rf.currentTerm >= term {
-		return rf.serverState
+		return rf.serverStateMachine
 	}
 
 	DPrintf(rf.me, cmpTerm, "@T%d < S%d@T%d. Converting to follower.", rf.currentTerm, serverId, term)
@@ -167,128 +170,62 @@ func (rf *Raft) readPersist(data []byte) {
 	// }
 }
 
-//
-// A service wants to switch to snapshot.  Only do so if Raft hasn't
-// had more recent info since it communicate the snapshot on applyCh.
-//
-func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
-
-	// Your code here (2D).
-
-	return true
-}
-
-// the service says it has created a snapshot that has
-// all info up to and including index. this means the
-// service no longer needs the log through (and including)
-// that index. Raft should now trim its log as much as possible.
-func (rf *Raft) Snapshot(index int, snapshot []byte) {
-	// Your code here (2D).
-
-}
-
-//
-// example RequestVote RPC arguments structure.
-// field names must start with capital letters!
-//
-type RequestVoteArgs struct {
-	Term        int // Candidate's Term
-	CandidateId int // ID of candidate requesting vote
-}
-
-func (args *RequestVoteArgs) String() string {
-	return fmt.Sprintf("C%d, T%d", args.CandidateId, args.Term)
-}
-
-//
-// example RequestVote RPC reply structure.
-// field names must start with capital letters!
-//
-type RequestVoteReply struct {
-	Term        int  // Current Term of server - for candidate to update itself
-	VoteGranted bool // Reply on whether candidate was granted vote
-}
-
-func (r *RequestVoteReply) String() string {
-	return fmt.Sprintf("T%d, %v", r.Term, r.VoteGranted)
+func (rf *Raft) isLeader() bool {
+	return rf.serverStateMachine.isLeader()
 }
 
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
 	DPrintf(rf.me, cmpRPC, "<=-= S%d Receive RequestVote(%v)", args.CandidateId, args)
-	rf.serverState = rf.checkTerm(args.CandidateId, args.Term)
-	rf.serverState = rf.serverState.requestVoteReceived(args, reply)
-	rf.mu.Unlock()
-}
-
-func (rf *Raft) sendRequestVoteRPC(serverId int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
-	DPrintf(rf.me, cmpRPC, "=-=> S%d Send RequestVote(%v)", serverId, args)
-	ok := rf.peers[serverId].Call("Raft.RequestVote", args, reply)
-	return ok
-}
-
-func (rf *Raft) requestVote(serverId, term, candidateId int) {
-	args := &RequestVoteArgs{Term: term, CandidateId: candidateId}
-	reply := &RequestVoteReply{}
-
-	for !rf.sendRequestVoteRPC(serverId, args, reply) {
-		DPrintf(rf.me, cmpRPC, "=/=> S%d Failed RequestVote()", serverId)
-
-		if rf.shouldRetryRequestVote(args) {
-			DPrintf(rf.me, cmpRPC, "=~=> S%d Retrying RequestVote())", serverId)
-		} else {
-			DPrintf(rf.me, cmpRPC, "=/=> S%d Dropping RequestVote()", serverId)
-			return
-		}
-	}
-
-	DPrintf(rf.me, cmpRPC, "<=~= S%d Response to RequestVote(%v) -> (%v)", serverId, args, reply)
-
-	rf.mu.Lock()
-	rf.serverState = rf.checkTerm(serverId, reply.Term)
-	rf.serverState = rf.serverState.voteResponseReceived(serverId, args, reply)
-	rf.mu.Unlock()
+	rf.serverStateMachine = rf.
+		checkTerm(args.CandidateId, args.Term).
+		processIncomingRequestVote(args, reply)
 }
 
 func (rf *Raft) shouldRetryRequestVote(args *RequestVoteArgs) bool {
-	var retry bool
-
 	rf.mu.Lock()
-	retry = rf.serverState.shouldRetryRequestVote(args)
-	rf.mu.Unlock()
-
-	return retry
+	defer rf.mu.Unlock()
+	
+	return rf.serverStateMachine.shouldRetryFailedRequestVote(args)
 }
 
-type AppendEntriesArgs struct {
-	Term     int // Leader's term
-	LeaderId int
-}
+func (rf *Raft) dispatchRequestVoteResponse(peer *Peer, args *RequestVoteArgs, reply *RequestVoteReply) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
-func (a *AppendEntriesArgs) String() string {
-	return fmt.Sprintf("L%d, T%d", a.LeaderId, a.Term)
-}
-
-type AppendEntriesReply struct {
-	Term    int // currentTerm, for leader to update itself
-	Success bool
-}
-
-func (r *AppendEntriesReply) String() string {
-	return fmt.Sprintf("T%d, %v", r.Term, r.Success)
+	DPrintf(rf.me, cmpRPC, "<=~= S%d Response to RequestVote(%v) -> (%v)", peer.serverId, args, reply)
+	rf.serverStateMachine = rf.
+		checkTerm(peer.serverId, reply.Term).
+		processRequestVoteResponse(peer.serverId, args, reply)
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
 	DPrintf(rf.me, cmpRPC, "<=-= S%d Receive AppendEntries(%v)", args.LeaderId, args)
-	rf.serverState = rf.checkTerm(args.LeaderId, args.Term)
-	rf.serverState = rf.serverState.appendEntriesReceived(args, reply)
-	rf.mu.Unlock()
+	rf.serverStateMachine = rf.
+		checkTerm(args.LeaderId, args.Term).
+		processIncomingAppendEntries(args, reply)
 }
 
-func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
-	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
-	return ok
+func (rf *Raft) shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	return rf.serverStateMachine.shouldRetryFailedAppendEntries(args)
+}
+
+func (rf *Raft) dispatchAppendEntriesResponse(peer *Peer, args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	DPrintf(rf.me, cmpRPC, "<=~= S%d Response to AppendEntries(%v) -> (%v)", peer.serverId, args, reply)
+	rf.serverStateMachine = rf.
+		checkTerm(peer.serverId, reply.Term).
+		processAppendEntriesResponse(peer.serverId, args, reply)
 }
 
 //
@@ -318,16 +255,10 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 // return currentTerm and whether this server
 // believes it is the leader.
 func (rf *Raft) GetState() (int, bool) {
-
-	var term int
-	var isLeader bool
-
 	rf.mu.Lock()
-	term = rf.currentTerm
-	isLeader = rf.serverState.isLeader()
-	rf.mu.Unlock()
+	defer rf.mu.Unlock()
 
-	return term, isLeader
+	return rf.currentTerm, rf.isLeader()
 }
 
 //
@@ -353,8 +284,8 @@ func (rf *Raft) killed() bool {
 
 //
 // the service or tester wants to create a Raft server. the ports
-// of all the Raft servers (including this one) are in peers[]. this
-// server's port is peers[me]. all the servers' peers[] arrays
+// of all the Raft servers (including this one) are in peerClients[]. this
+// server's port is peerClients[me]. all the servers' peerClients[] arrays
 // have the same order. persister is a place for this server to
 // save its persistent state, and also initially holds the most
 // recent saved state, if any. applyCh is a channel on which the
@@ -365,7 +296,9 @@ func (rf *Raft) killed() bool {
 func Make(peers []*labrpc.ClientEnd, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{}
-	rf.peers = peers
+	for id, peer := range peers {
+		rf.peers = append(rf.peers, &Peer{raft: rf, endPoint: peer, serverId: id})
+	}
 	rf.persister = persister
 	rf.me = me
 	rf.votedFor = -1
@@ -376,7 +309,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
 
 	// initialize server state handler
-	rf.serverState = &Follower{rf: rf}
+	rf.serverStateMachine = &Follower{rf: rf}
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())

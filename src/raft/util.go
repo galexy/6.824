@@ -6,7 +6,7 @@ import (
 )
 
 var debug = false
-var indent = false
+var indent = true
 
 func init() {
 	//debugVerbosity = getVerbosity()
