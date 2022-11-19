@@ -16,7 +16,7 @@ func init() {
 	log.SetFlags(log.Flags() | log.Lmicroseconds)
 }
 
-func DPrintf(procId int, topic string, format string, a ...interface{}) (n int, err error) {
+func DPrintf(procId int, topic string, format string, a ...interface{}) {
 	if debug {
 		prefix := ""
 
@@ -30,5 +30,4 @@ func DPrintf(procId int, topic string, format string, a ...interface{}) (n int, 
 		format = prefix + format
 		log.Printf(format, a...)
 	}
-	return
 }
