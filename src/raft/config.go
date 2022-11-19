@@ -632,7 +632,7 @@ func (cfg *config) end() {
 	if cfg.t.Failed() == false {
 		cfg.mu.Lock()
 		t := time.Since(cfg.t0).Seconds()       // real time
-		npeers := cfg.n                         // number of Raft peers
+		npeers := cfg.n                         // number of Raft peerClients
 		nrpc := cfg.rpcTotal() - cfg.rpcs0      // number of RPC sends
 		nbytes := cfg.bytesTotal() - cfg.bytes0 // number of bytes
 		ncmds := cfg.maxIndex - cfg.maxIndex0   // number of Raft agreements reported

@@ -1,6 +1,32 @@
 package raft
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
+
+type AppendEntriesArgs struct {
+	Term     int // Leader's term
+	LeaderId int
+}
+
+func (a *AppendEntriesArgs) String() string {
+	return fmt.Sprintf("L%d, T%d", a.LeaderId, a.Term)
+}
+
+func (a *AppendEntriesArgs) isHeartbeat() bool {
+	// TODO: update based on log entries
+	return true
+}
+
+type AppendEntriesReply struct {
+	Term    int // currentTerm, for leader to update itself
+	Success bool
+}
+
+func (r *AppendEntriesReply) String() string {
+	return fmt.Sprintf("T%d, %v", r.Term, r.Success)
+}
 
 type Leader struct {
 	rf *Raft
@@ -10,12 +36,12 @@ func (l *Leader) isLeader() bool {
 	return true
 }
 
-func (l *Leader) electionTimeoutElapsed() ServerState {
+func (l *Leader) processElectionTimeout() ServerStateMachine {
 	l.rf.resetTimer()
 	return l
 }
 
-func (l *Leader) requestVoteReceived(args *RequestVoteArgs, reply *RequestVoteReply) ServerState {
+func (l *Leader) processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
 	DPrintf(l.rf.me, cmpLeader, "Denying RequestVote from C%d@T%d. Already Leader",
 		args.CandidateId, args.Term)
 
@@ -25,14 +51,14 @@ func (l *Leader) requestVoteReceived(args *RequestVoteArgs, reply *RequestVoteRe
 	return l
 }
 
-func (l *Leader) voteResponseReceived(serverId int, args *RequestVoteArgs, _ *RequestVoteReply) ServerState {
+func (l *Leader) processRequestVoteResponse(serverId int, args *RequestVoteArgs, _ *RequestVoteReply) ServerStateMachine {
 	DPrintf(l.rf.me, cmpLeader, "Ignoring RequestVote Response from S%d@T%d. Already Leader",
 		serverId, args.Term)
 
 	return l
 }
 
-func (l *Leader) appendEntriesReceived(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerState {
+func (l *Leader) processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine {
 	if args.Term >= l.rf.currentTerm {
 		// 1) Shouldn't have a leader with the same term
 		// 2) Newer term should have made current server a follower
@@ -47,7 +73,7 @@ func (l *Leader) appendEntriesReceived(args *AppendEntriesArgs, reply *AppendEnt
 	return l
 }
 
-func (l *Leader) shouldRetryRequestVote(_ *RequestVoteArgs) bool {
+func (l *Leader) shouldRetryFailedRequestVote(_ *RequestVoteArgs) bool {
 	return false
 }
 
@@ -55,34 +81,38 @@ func (l *Leader) heartbeat() {
 	// TODO: create a heartbeat id
 	for l.rf.killed() == false {
 		l.rf.mu.Lock()
-		if l.rf.serverState != l {
+		if l.rf.serverStateMachine != l {
 			DPrintf(l.rf.me, cmpLeader, "No longer leader. Killing heartbeat.")
 			l.rf.mu.Unlock()
 			break
 		}
 
 		DPrintf(l.rf.me, cmpLeader, "Sending Heartbeat")
-		for serverId := range l.rf.peers {
-			if serverId == l.rf.me {
-				continue
-			}
-
-			go func(rf *Raft, serverId, term int) {
-				args := &AppendEntriesArgs{Term: term, LeaderId: rf.me}
-				reply := &AppendEntriesReply{}
-
-				ok := l.rf.sendAppendEntries(serverId, args, reply)
-				if !ok {
-					// TODO: Handle error
-				}
-
-				rf.mu.Lock()
-				rf.serverState = rf.checkTerm(serverId, reply.Term)
-				rf.mu.Unlock()
-			}(l.rf, serverId, l.rf.currentTerm)
-		}
+		l.sendAppendEntries()
 
 		l.rf.mu.Unlock()
 		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
+}
+
+func (l *Leader) sendAppendEntries() {
+	for peerId, peer := range l.rf.peers {
+		if peerId == l.rf.me {
+			continue
+		}
+
+		go peer.callAppendEntries(l.rf.me, l.rf.currentTerm)
+	}
+}
+
+func (l *Leader) shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool {
+	return args.Term == l.rf.currentTerm && !args.isHeartbeat()
+}
+
+func (l *Leader) processAppendEntriesResponse(
+	serverId int,
+	args *AppendEntriesArgs,
+	reply *AppendEntriesReply) ServerStateMachine {
+
+	return l
 }
