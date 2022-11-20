@@ -95,16 +95,6 @@ func (l *Leader) heartbeat() {
 	}
 }
 
-func (l *Leader) sendAppendEntries() {
-	for peerId, peer := range l.rf.peers {
-		if peerId == l.rf.me {
-			continue
-		}
-
-		go peer.callAppendEntries(l.rf.me, l.rf.currentTerm)
-	}
-}
-
 func (l *Leader) shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool {
 	return args.Term == l.rf.currentTerm && !args.isHeartbeat()
 }
@@ -115,4 +105,18 @@ func (l *Leader) processAppendEntriesResponse(
 	reply *AppendEntriesReply) ServerStateMachine {
 
 	return l
+}
+
+func (l *Leader) processCommand(command interface{}) (index int, term int) {
+	panic("Candidate should not be processing commands!")
+}
+
+func (l *Leader) sendAppendEntries() {
+	for peerId, peer := range l.rf.peers {
+		if peerId == l.rf.me {
+			continue
+		}
+
+		go peer.callAppendEntries(l.rf.me, l.rf.currentTerm)
+	}
 }

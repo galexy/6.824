@@ -72,6 +72,8 @@ type ServerStateMachine interface {
 	processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
 	shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool
 	processAppendEntriesResponse(serverId int, args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
+
+	processCommand(command interface{}) (index int, term int)
 }
 
 //
@@ -95,6 +97,7 @@ type Raft struct {
 	currentTerm         int                // Latest term server has seen
 	votedFor            int                // Candidate that received vote in current term, -1 is null
 
+	log         Log
 	commitIndex int // Index of highest log entry known
 	lastApplied int // Index of highest log entry applied to state machine
 }
@@ -187,7 +190,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 func (rf *Raft) shouldRetryRequestVote(args *RequestVoteArgs) bool {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	
+
 	return rf.serverStateMachine.shouldRetryFailedRequestVote(args)
 }
 
@@ -242,14 +245,17 @@ func (rf *Raft) dispatchAppendEntriesResponse(peer *Peer, args *AppendEntriesArg
 // term. the third return value is true if this server believes it is
 // the leader.
 //
-func (rf *Raft) Start(command interface{}) (int, int, bool) {
-	index := -1
-	term := -1
-	isLeader := true
+func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
-	// Your code here (2B).
+	isLeader = rf.isLeader()
+	if !isLeader {
+		return
+	}
 
-	return index, term, isLeader
+	index, term = rf.serverStateMachine.processCommand(command)
+	return
 }
 
 // return currentTerm and whether this server

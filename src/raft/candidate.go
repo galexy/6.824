@@ -125,3 +125,7 @@ func (c *Candidate) processAppendEntriesResponse(
 	DPrintf(c.rf.me, cmpCandidate, "Received Stale AppendEntries Response. Ignoring.")
 	return c
 }
+
+func (c *Candidate) processCommand(command interface{}) (index int, term int) {
+	panic("Candidate should not be processing commands!")
+}

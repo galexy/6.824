@@ -81,3 +81,7 @@ func (f *Follower) processAppendEntriesResponse(
 	DPrintf(f.rf.me, cmpCandidate, "Received Stale AppendEntries Response. Ignoring.")
 	return f
 }
+
+func (f *Follower) processCommand(command interface{}) (index int, term int) {
+	panic("Follower should not be processing commands!")
+}
