@@ -100,7 +100,7 @@ func (c *Candidate) processRequestVoteResponse(serverId int, args *RequestVoteAr
 	if totalVotes > len(c.votes)/2 {
 		DPrintf(c.rf.me, cmpCandidate, "Received majority of votes. Promoting to Leader")
 		leader := &Leader{rf: c.rf}
-		go leader.heartbeat()
+		leader.initHeartbeats()
 
 		return leader
 	}

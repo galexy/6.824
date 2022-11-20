@@ -29,7 +29,17 @@ func (r *AppendEntriesReply) String() string {
 }
 
 type Leader struct {
-	rf *Raft
+	rf            *Raft
+	nextHeartbeat []time.Time // For each peer, when will next heartbeat expire
+}
+
+func (l *Leader) initHeartbeats() {
+	now := time.Now()
+	l.nextHeartbeat = make([]time.Time, len(l.rf.peers))
+	for i := range l.nextHeartbeat {
+		l.nextHeartbeat[i] = now
+	}
+	l.processTick()
 }
 
 func (l *Leader) isLeader() bool {
@@ -37,7 +47,17 @@ func (l *Leader) isLeader() bool {
 }
 
 func (l *Leader) processTick() {
+	now := time.Now()
+	for peerId, beat := range l.nextHeartbeat {
+		if peerId == l.rf.me {
+			continue
+		}
 
+		if now.After(beat) || now.Equal(beat) {
+			l.nextHeartbeat[peerId] = now.Add(l.rf.heartBeatInterval)
+			go l.rf.peers[peerId].callAppendEntries(l.rf.me, l.rf.currentTerm)
+		}
+	}
 }
 
 func (l *Leader) processElectionTimeout() ServerStateMachine {
@@ -80,23 +100,22 @@ func (l *Leader) shouldRetryFailedRequestVote(_ *RequestVoteArgs) bool {
 	return false
 }
 
-func (l *Leader) heartbeat() {
-	// TODO: create a heartbeat id
-	for l.rf.killed() == false {
-		l.rf.mu.Lock()
-		if l.rf.serverStateMachine != l {
-			DPrintf(l.rf.me, cmpLeader, "No longer leader. Killing heartbeat.")
-			l.rf.mu.Unlock()
-			break
-		}
-
-		DPrintf(l.rf.me, cmpLeader, "Sending Heartbeat")
-		l.sendAppendEntries()
-
-		l.rf.mu.Unlock()
-		time.Sleep(time.Duration(100) * time.Millisecond)
-	}
-}
+//func (l *Leader) heartbeat() {
+//	for l.rf.killed() == false {
+//		l.rf.mu.Lock()
+//		if l.rf.serverStateMachine != l {
+//			DPrintf(l.rf.me, cmpLeader, "No longer leader. Killing heartbeat.")
+//			l.rf.mu.Unlock()
+//			break
+//		}
+//
+//		DPrintf(l.rf.me, cmpLeader, "Sending Heartbeat")
+//		l.sendAppendEntries()
+//
+//		l.rf.mu.Unlock()
+//		time.Sleep(time.Duration(100) * time.Millisecond)
+//	}
+//}
 
 func (l *Leader) shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool {
 	return args.Term == l.rf.currentTerm && !args.isHeartbeat()
@@ -114,12 +133,12 @@ func (l *Leader) processCommand(command interface{}) (index int, term int) {
 	panic("Candidate should not be processing commands!")
 }
 
-func (l *Leader) sendAppendEntries() {
-	for peerId, peer := range l.rf.peers {
-		if peerId == l.rf.me {
-			continue
-		}
-
-		go peer.callAppendEntries(l.rf.me, l.rf.currentTerm)
-	}
-}
+//func (l *Leader) sendAppendEntries() {
+//	for peerId, peer := range l.rf.peers {
+//		if peerId == l.rf.me {
+//			continue
+//		}
+//
+//		go peer.callAppendEntries(l.rf.me, l.rf.currentTerm)
+//	}
+//}

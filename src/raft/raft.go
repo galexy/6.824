@@ -85,7 +85,7 @@ type Raft struct {
 	peers             []*Peer // Peer nodes that encapsulates RPC endpoints
 	me                int     // this peer's index into peers[]
 	electionTimeout   time.Duration
-	heartBeatInterval int
+	heartBeatInterval time.Duration
 
 	// Accessed atomically
 	dead int32 // set by Kill()
@@ -314,7 +314,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// Initialize timeouts
 	rf.electionTimeout = time.Duration(rand.Intn(300)+500) * time.Millisecond
-	rf.heartBeatInterval = 110
+	rf.heartBeatInterval = time.Duration(110) * time.Millisecond
 	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
 
 	// initialize server state handler
