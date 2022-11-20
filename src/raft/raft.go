@@ -36,6 +36,7 @@ const (
 	cmpTerm      = "_TERM_"
 	cmpRPC       = "SRVRPC"
 	cmpLeader    = "LEADER"
+	cmpClient    = "CLIENT"
 )
 
 //
@@ -254,6 +255,7 @@ func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) 
 
 	isLeader = rf.isLeader()
 	if !isLeader {
+		DPrintf(rf.me, cmpClient, "Not leader - rejecting command(%v)", command)
 		return
 	}
 
@@ -319,6 +321,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// initialize server state handler
 	rf.serverStateMachine = &Follower{rf: rf}
+
+	// initialize log
+	rf.log = MakeLog()
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())

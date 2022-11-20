@@ -14,11 +14,25 @@ type Log interface {
 }
 
 type LogImpl struct {
-	entries []interface{} // Entries in the current server's log
+	entries []*LogEntry // Entries in the current server's log
+}
+
+func MakeLog() Log {
+	log := &LogImpl{}
+	log.entries = make([]*LogEntry, 1024)
+
+	return log
 }
 
 func (l *LogImpl) append(term int, command interface{}) (newEntry, prevEntry *LogEntry) {
-	return nil, nil
+	newIndex := len(l.entries)
+	if newIndex > 0 {
+		prevEntry = l.entries[newIndex-1]
+	}
+	newEntry = &LogEntry{index: newIndex, term: term, command: command}
+	l.entries = append(l.entries, newEntry)
+
+	return
 }
 
 func (l *LogImpl) hasEntryAt(index int, term int) bool {

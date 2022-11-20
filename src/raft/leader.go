@@ -130,7 +130,9 @@ func (l *Leader) processAppendEntriesResponse(
 }
 
 func (l *Leader) processCommand(command interface{}) (index int, term int) {
-	panic("Candidate should not be processing commands!")
+	newEntry, _ := l.rf.log.append(term, command)
+	DPrintf(l.rf.me, cmpLeader, "enqueue(command=%v) to log(%d, T%d)", command, index, term)
+	return newEntry.index, newEntry.term
 }
 
 //func (l *Leader) sendAppendEntries() {
