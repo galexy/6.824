@@ -8,6 +8,10 @@ func (f *Follower) isLeader() bool {
 	return false
 }
 
+func (f *Follower) processTick() {
+	panic("Followers only process election timeout")
+}
+
 func (f *Follower) processElectionTimeout() ServerStateMachine {
 	DPrintf(f.rf.me, cmpFollower, "Converting to Candidate")
 
@@ -40,7 +44,7 @@ func (f *Follower) processIncomingRequestVote(args *RequestVoteArgs, reply *Requ
 	DPrintf(f.rf.me, cmpFollower, "Granting vote to C%d @ T%d, Resetting Timer", args.CandidateId, args.Term)
 	reply.Term = f.rf.currentTerm
 	reply.VoteGranted = true
-	f.rf.resetTimer()
+	f.rf.resetElectionTimeout()
 
 	return f
 }
@@ -64,7 +68,7 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 		DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true.", args.LeaderId, args.Term)
 		reply.Term = f.rf.currentTerm
 		reply.Success = true
-		f.rf.resetTimer()
+		f.rf.resetElectionTimeout()
 	}
 	return f
 }

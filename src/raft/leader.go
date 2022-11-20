@@ -36,9 +36,12 @@ func (l *Leader) isLeader() bool {
 	return true
 }
 
+func (l *Leader) processTick() {
+
+}
+
 func (l *Leader) processElectionTimeout() ServerStateMachine {
-	l.rf.resetTimer()
-	return l
+	panic("Leaders should not see election timeouts")
 }
 
 func (l *Leader) processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {

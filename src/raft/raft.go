@@ -63,6 +63,7 @@ type ApplyMsg struct {
 
 type ServerStateMachine interface {
 	isLeader() bool
+	processTick()
 	processElectionTimeout() ServerStateMachine
 
 	processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
@@ -110,7 +111,9 @@ func (rf *Raft) ticker() {
 		now := time.Now()
 
 		rf.mu.Lock()
-		if now.After(rf.nextElectionTimeout) {
+		if rf.isLeader() {
+			rf.serverStateMachine.processTick()
+		} else if now.After(rf.nextElectionTimeout) {
 			DPrintf(rf.me, cmpTicker, "Election Timeout (%v) elapsed", rf.electionTimeout)
 
 			rf.serverStateMachine = rf.serverStateMachine.processElectionTimeout()
@@ -119,7 +122,7 @@ func (rf *Raft) ticker() {
 	}
 }
 
-func (rf *Raft) resetTimer() {
+func (rf *Raft) resetElectionTimeout() {
 	// Update the next timeout
 	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
 }

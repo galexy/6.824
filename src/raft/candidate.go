@@ -31,7 +31,7 @@ func (c *Candidate) isLeader() bool {
 
 func (c *Candidate) startElection() {
 	c.rf.currentTerm += 1
-	c.rf.resetTimer()
+	c.rf.resetElectionTimeout()
 	c.votes = make([]bool, len(c.rf.peers))
 	c.votes[c.rf.me] = true
 	c.rf.votedFor = c.rf.me
@@ -44,6 +44,10 @@ func (c *Candidate) startElection() {
 
 		go peer.callRequestVote(c.rf.currentTerm, c.rf.me)
 	}
+}
+
+func (c *Candidate) processTick() {
+	panic("Candidates only process election timeout")
 }
 
 func (c *Candidate) processElectionTimeout() ServerStateMachine {
