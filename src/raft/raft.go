@@ -256,7 +256,7 @@ func (rf *Raft) applyLog() {
 		msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: commandIndex}
 
 		rf.applyChn <- msg
-		DPrintf(rf.me, cmpCommit, "finished applying log index %d", index)
+		rf.lastApplied = index
 	}
 }
 
