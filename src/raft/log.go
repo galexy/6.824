@@ -83,7 +83,7 @@ func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
 			// Append new entry
 			DPrintf(l.rf.me, cmpLogger, "Appending replicated entry %d@T%d", entry.Index, entry.Term)
 			l.entries = append(l.entries, entry)
-			return
+			continue
 		}
 
 		// entry index already in log, check if there is a conflict
