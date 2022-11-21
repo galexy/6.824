@@ -156,6 +156,8 @@ func (l *Leader) processAppendEntriesResponse(
 		nextIndex := l.nextIndex[serverId]
 		DPrintf(l.rf.me, cmpLeader, "decrementing nextIndex(S=%d) to %d", serverId, nextIndex-1)
 		l.nextIndex[serverId] = nextIndex - 1
+
+		return l
 	}
 
 	// if success, update nextIndex and maxIndex for follower (section 5.3)
