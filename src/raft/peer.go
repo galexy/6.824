@@ -10,8 +10,8 @@ type Peer struct {
 	serverId int
 }
 
-func (p *Peer) callRequestVote(term int, candidate int) {
-	args := &RequestVoteArgs{Term: term, CandidateId: candidate}
+func (p *Peer) callRequestVote(term, candidate, lastLogIndex, lastLogTerm int) {
+	args := &RequestVoteArgs{Term: term, CandidateId: candidate, LastLogIndex: lastLogIndex, LastLogTerm: lastLogTerm}
 	reply := &RequestVoteReply{}
 
 	DPrintf(p.raft.me, cmpRPC, "=-=> S%d Send RequestVote(%v)", p.serverId, args)

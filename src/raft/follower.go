@@ -22,8 +22,6 @@ func (f *Follower) processElectionTimeout() ServerStateMachine {
 }
 
 func (f *Follower) processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
-	DPrintf(f.rf.me, cmpFollower, "Vote Requested from C%d@T%d", args.CandidateId, args.Term)
-
 	if f.rf.currentTerm > args.Term {
 		DPrintf(f.rf.me, cmpFollower, "@T%d > C%d@ T%d, Rejecting", f.rf.currentTerm, args.CandidateId, args.Term)
 		reply.Term = f.rf.currentTerm
@@ -38,7 +36,15 @@ func (f *Follower) processIncomingRequestVote(args *RequestVoteArgs, reply *Requ
 		return f
 	}
 
-	// TODO: Add check for candidate log is at least up to date
+	// Check if candidate is at least as up to date (section 5.4)
+	lastIndex, lastTerm := f.rf.log.lastLogEntry()
+	if lastTerm > args.LastLogTerm || lastIndex > args.LastLogIndex {
+		DPrintf(f.rf.me, cmpFollower, "candidate C%d last log %d@T%d < current server %d@%d, rejecting",
+			args.CandidateId, args.LastLogIndex, args.LastLogTerm, lastIndex, lastTerm)
+		reply.Term = f.rf.currentTerm
+		reply.VoteGranted = false
+		return f
+	}
 
 	f.rf.votedFor = args.CandidateId
 	DPrintf(f.rf.me, cmpFollower, "Granting vote to C%d @ T%d, Resetting Timer", args.CandidateId, args.Term)

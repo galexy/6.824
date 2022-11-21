@@ -3,12 +3,14 @@ package raft
 import "fmt"
 
 type RequestVoteArgs struct {
-	Term        int // Candidate's Term
-	CandidateId int // ID of candidate requesting vote
+	Term         int // Candidate's Term
+	CandidateId  int // ID of candidate requesting vote
+	LastLogIndex int // index of Candidate's last log entry
+	LastLogTerm  int // term of Candidate's last log entry
 }
 
 func (args *RequestVoteArgs) String() string {
-	return fmt.Sprintf("C%d, T%d", args.CandidateId, args.Term)
+	return fmt.Sprintf("C=%d, T=%d, LI=%d, LT=%d", args.CandidateId, args.Term, args.LastLogIndex, args.LastLogTerm)
 }
 
 type RequestVoteReply struct {
@@ -36,13 +38,14 @@ func (c *Candidate) startElection() {
 	c.votes[c.rf.me] = true
 	c.rf.votedFor = c.rf.me
 
-	DPrintf(c.rf.me, cmpCandidate, "Calling for election @T%d", c.rf.currentTerm)
+	DPrintf(c.rf.me, cmpCandidate, "running a campaign(T=%d)", c.rf.currentTerm)
 	for peerId, peer := range c.rf.peers {
 		if peerId == c.rf.me {
 			continue
 		}
 
-		go peer.callRequestVote(c.rf.currentTerm, c.rf.me)
+		index, term := c.rf.log.lastLogEntry()
+		go peer.callRequestVote(c.rf.currentTerm, c.rf.me, index, term)
 	}
 }
 
@@ -57,7 +60,7 @@ func (c *Candidate) processElectionTimeout() ServerStateMachine {
 }
 
 func (c *Candidate) processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
-	DPrintf(c.rf.me, cmpCandidate, "Denying RequestVote from S%d@T%d. Trying to win election.",
+	DPrintf(c.rf.me, cmpCandidate, "Denying RequestVote(S%d, T=%d). Trying to win election.",
 		args.CandidateId, args.Term)
 
 	reply.Term = c.rf.currentTerm

@@ -18,6 +18,7 @@ type Log interface {
 	getEntriesFrom(index int) (prevEntry *LogEntry, entries []*LogEntry)
 	nextIndex() int
 	insertReplicatedEntries(entries []*LogEntry)
+	lastLogEntry() (index, term int)
 	getEntryAt(index int) (entry *LogEntry)
 }
 
@@ -82,6 +83,7 @@ func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
 			// Append new entry
 			DPrintf(l.rf.me, cmpLogger, "Appending replicated entry %d@T%d", entry.Index, entry.Term)
 			l.entries = append(l.entries, entry)
+			return
 		}
 
 		// entry index already in log, check if there is a conflict
@@ -96,6 +98,15 @@ func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
 
 		DPrintf(l.rf.me, cmpLogger, "Already have %d@T%d, skipping.", entry.Index, entry.Term)
 	}
+}
+
+func (l *LogImpl) lastLogEntry() (index, term int) {
+	if len(l.entries) == 0 {
+		return -1, -1
+	}
+
+	lastEntry := l.entries[len(l.entries)-1]
+	return lastEntry.Index, lastEntry.Term
 }
 
 func (l *LogImpl) getEntryAt(index int) (entry *LogEntry) {
