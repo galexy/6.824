@@ -15,7 +15,7 @@ type AppendEntriesArgs struct {
 }
 
 func (a *AppendEntriesArgs) String() string {
-	return fmt.Sprintf("L%d, T%d, PI:%d, PT:%d, LC:%d, %v",
+	return fmt.Sprintf("L=%d, T=%d, PI=%d, PT=%d, LC=%d, c=%v",
 		a.LeaderId, a.Term, a.PrevLogIndex, a.PrevLogTerm, a.LeaderCommit, a.Entries)
 }
 
@@ -29,7 +29,7 @@ type AppendEntriesReply struct {
 }
 
 func (r *AppendEntriesReply) String() string {
-	return fmt.Sprintf("T%d, %v", r.Term, r.Success)
+	return fmt.Sprintf("T=%d, S=%v", r.Term, r.Success)
 }
 
 type Leader struct {
@@ -43,12 +43,12 @@ func MakeLeader(rf *Raft) *Leader {
 	leader := &Leader{rf: rf}
 	leader.nextIndex = make([]int, len(rf.peers))
 	nextIndex := rf.log.nextIndex()
-	for i, _ := range leader.nextIndex {
-		leader.nextIndex[i] = nextIndex
+	for index := range leader.nextIndex {
+		leader.nextIndex[index] = nextIndex
 	}
 	leader.maxIndex = make([]int, len(rf.peers))
-	for i, _ := range leader.maxIndex {
-		leader.maxIndex[i] = -1
+	for index := range leader.maxIndex {
+		leader.maxIndex[index] = -1
 	}
 	leader.initHeartbeats()
 
@@ -77,7 +77,6 @@ func (l *Leader) processTick() {
 		}
 
 		if now.After(beat) || now.Equal(beat) {
-			// TODO: add support for pure heartbeat
 			prevEntry, entries := l.rf.log.getEntriesFrom(l.nextIndex[peerId])
 
 			// reset heartbeat timeout for peer
@@ -106,7 +105,7 @@ func (l *Leader) processElectionTimeout() ServerStateMachine {
 }
 
 func (l *Leader) processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
-	DPrintf(l.rf.me, cmpLeader, "Denying RequestVote from C%d@T%d. Already Leader",
+	DPrintf(l.rf.me, cmpLeader, "Denying RequestVote(C=%d,T=%d). Already Leader",
 		args.CandidateId, args.Term)
 
 	reply.Term = l.rf.currentTerm
@@ -129,7 +128,7 @@ func (l *Leader) processIncomingAppendEntries(args *AppendEntriesArgs, reply *Ap
 		panic("Leader unexpectedly received AppendEntries for current or newer Term.")
 	}
 
-	DPrintf(l.rf.me, cmpLeader, "S%d ~~> S%d AppendEntries Resp (T:%d, Success:false)",
+	DPrintf(l.rf.me, cmpLeader, "S%d ~~> S%d AppendEntriesReply(T=%d,S=false)",
 		l.rf.me, args.LeaderId, l.rf.currentTerm)
 	reply.Term = l.rf.currentTerm
 	reply.Success = false
@@ -152,7 +151,12 @@ func (l *Leader) processAppendEntriesResponse(
 
 	// TODO: add check for failure due to outdated term
 
-	// TODO: add check for log inconsitency
+	// check for log inconsistency
+	if !reply.Success && reply.Term == l.rf.currentTerm {
+		nextIndex := l.nextIndex[serverId]
+		DPrintf(l.rf.me, cmpLeader, "decrementing nextIndex(S=%d) to %d", serverId, nextIndex-1)
+		l.nextIndex[serverId] = nextIndex - 1
+	}
 
 	// if success, update nextIndex and maxIndex for follower (section 5.3)
 	l.updateIndexes(serverId, args)
@@ -176,19 +180,19 @@ func (l *Leader) updateIndexes(serverId int, args *AppendEntriesArgs) {
 	}
 
 	if currentNextIndex >= newNextIndex {
-		DPrintf(l.rf.me, cmpLeader, "nextIndex for S%d %d >= %d, not updating",
+		DPrintf(l.rf.me, cmpLeader, "nextIndex(S=%d) %d >= %d, not updating",
 			serverId, currentNextIndex, newNextIndex)
 	} else {
-		DPrintf(l.rf.me, cmpLeader, "update nextIndex for S%d to %d.", serverId, newNextIndex)
+		DPrintf(l.rf.me, cmpLeader, "update nextIndex(S=%d) to %d.", serverId, newNextIndex)
 		l.nextIndex[serverId] = newNextIndex
 	}
 
 	maxUpdated := false
 	if currentMaxIndex >= newMaxIndex {
-		DPrintf(l.rf.me, cmpLeader, "maxIndex for S%d %d >= %d, not updating",
+		DPrintf(l.rf.me, cmpLeader, "maxIndex(S=%d) %d >= %d, not updating",
 			serverId, currentMaxIndex, newMaxIndex)
 	} else {
-		DPrintf(l.rf.me, cmpLeader, "update maxIndex for S%d to %d.", serverId, newMaxIndex)
+		DPrintf(l.rf.me, cmpLeader, "update maxIndex(S=%d) to %d.", serverId, newMaxIndex)
 		l.maxIndex[serverId] = newMaxIndex
 		maxUpdated = true
 	}
@@ -212,7 +216,9 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 
 	indexCounts := make([]int, end-start)
 	for _, max := range l.maxIndex {
-		if max == -1 {
+		// if the max index for a peer is below leader commit index, it can't contribute
+		// to a majority that would update commit index, so it's safe to skip
+		if max-start < 0 {
 			continue
 		}
 		indexCounts[max-start]++
@@ -222,7 +228,7 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 	accum := 1
 	for index := end - 1; index >= start; index-- {
 		accum += indexCounts[index-l.rf.commitIndex]
-		DPrintf(l.rf.me, cmpLeader, "%d nodes have commitIndex %d or higher", accum, index)
+		DPrintf(l.rf.me, cmpLeader, "%d nodes have commitIndex=>%d", accum, index)
 		if accum >= majority {
 			maxCommitEntry := l.rf.log.getEntryAt(index)
 			if maxCommitEntry == nil {
@@ -236,7 +242,7 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 			}
 
 			if l.rf.commitIndex < index {
-				DPrintf(l.rf.me, cmpLeader, "updating commitIndex to %d.", index)
+				DPrintf(l.rf.me, cmpLeader, "updating commitIndex=%d.", index)
 				l.rf.commitIndex = index
 				return true
 			}
@@ -250,7 +256,7 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 
 func (l *Leader) processCommand(command interface{}) (index int, term int) {
 	newEntry, _ := l.rf.log.append(l.rf.currentTerm, command)
-	DPrintf(l.rf.me, cmpLeader, "enqueue(Command=%v) @(%d, T%d)",
+	DPrintf(l.rf.me, cmpLeader, "enqueue(Command=%v,I=%d,T%d)",
 		command, newEntry.Index, newEntry.Term)
 	return newEntry.Index, newEntry.Term
 }
