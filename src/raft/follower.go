@@ -77,7 +77,7 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 	// Check 2 - Section 5.3 of Raft paper
 	if !f.rf.log.hasEntryAt(args.PrevLogIndex, args.PrevLogTerm) {
 		DPrintf(f.rf.me, cmpFollower, "doesn't have log entries I%d@T%d. Replying false.",
-			args.PrevLogIndex, args.PrevLogIndex)
+			args.PrevLogIndex, args.PrevLogTerm)
 		reply.Term = f.rf.currentTerm
 		reply.Success = false
 		return f
