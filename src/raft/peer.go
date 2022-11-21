@@ -29,8 +29,15 @@ func (p *Peer) callRequestVote(term int, candidate int) {
 	p.raft.dispatchRequestVoteResponse(p, args, reply)
 }
 
-func (p *Peer) callAppendEntries(leaderId int, term int) {
-	args := &AppendEntriesArgs{LeaderId: leaderId, Term: term}
+func (p *Peer) callAppendEntries(leaderId int, term int, prevLogIndex, prevLogTerm int, entries []*LogEntry, leaderCommit int) {
+	args := &AppendEntriesArgs{
+		LeaderId:     leaderId,
+		Term:         term,
+		PrevLogIndex: prevLogIndex,
+		PrevLogTerm:  prevLogTerm,
+		Entries:      entries,
+		LeaderCommit: leaderCommit,
+	}
 	reply := &AppendEntriesReply{}
 
 	DPrintf(p.raft.me, cmpRPC, "=-=> S%d Send AppendEntries(%v)", p.serverId, args)

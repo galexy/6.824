@@ -24,3 +24,11 @@ func DPrintf(procId int, topic string, format string, a ...interface{}) {
 		log.Printf(format, a...)
 	}
 }
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	} else {
+		return b
+	}
+}

@@ -59,17 +59,49 @@ func (f *Follower) processRequestVoteResponse(serverId int, args *RequestVoteArg
 }
 
 func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine {
+	// Check 1 - Section 5.1 of Raft paper
 	if f.rf.currentTerm > args.Term {
 		DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d < S%d@T%d. Replying false.",
 			args.LeaderId, args.Term, f.rf.me, f.rf.currentTerm)
 		reply.Term = f.rf.currentTerm
 		reply.Success = false
-	} else {
-		DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true.", args.LeaderId, args.Term)
-		reply.Term = f.rf.currentTerm
-		reply.Success = true
-		f.rf.resetElectionTimeout()
+		return f
 	}
+
+	// Check 2 - Section 5.3 of Raft paper
+	if !f.rf.log.hasEntryAt(args.PrevLogIndex, args.PrevLogTerm) {
+		DPrintf(f.rf.me, cmpFollower, "doesn't have log entries I%d@T%d. Replying false.",
+			args.PrevLogIndex, args.PrevLogIndex)
+		reply.Term = f.rf.currentTerm
+		reply.Success = false
+		return f
+	}
+
+	f.rf.log.insertReplicatedEntries(args.Entries)
+
+	// Check 5 - Update Commit Index
+	if f.rf.commitIndex < args.LeaderCommit {
+		var maxEntry = 0
+		if len(args.Entries) == 0 {
+			maxEntry = args.PrevLogIndex
+		} else {
+			maxEntry = args.Entries[len(args.Entries)-1].Index
+		}
+
+		var newCommitIndex = max(maxEntry, args.LeaderCommit)
+
+		DPrintf(f.rf.me, cmpFollower, "leaderCommit %d > commitIndex %d. updating to %d",
+			args.LeaderCommit, f.rf.commitIndex, newCommitIndex)
+
+		f.rf.commitIndex = newCommitIndex
+		go f.rf.applyLog()
+	}
+
+	DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true.", args.LeaderId, args.Term)
+	reply.Term = f.rf.currentTerm
+	reply.Success = true
+	f.rf.resetElectionTimeout()
+
 	return f
 }
 
