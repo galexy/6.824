@@ -38,8 +38,8 @@ func (f *Follower) processIncomingRequestVote(args *RequestVoteArgs, reply *Requ
 
 	// Check if candidate is at least as up to date (section 5.4)
 	lastIndex, lastTerm := f.rf.log.lastLogEntry()
-	if lastTerm > args.LastLogTerm || lastIndex > args.LastLogIndex {
-		DPrintf(f.rf.me, cmpFollower, "candidate C%d last log %d@T%d < current server %d@%d, rejecting",
+	if lastTerm > args.LastLogTerm || (lastTerm == args.LastLogTerm && lastIndex > args.LastLogIndex) {
+		DPrintf(f.rf.me, cmpFollower, "candidate C%d last log %d@T%d < current server %d@T%d, rejecting",
 			args.CandidateId, args.LastLogIndex, args.LastLogTerm, lastIndex, lastTerm)
 		reply.Term = f.rf.currentTerm
 		reply.VoteGranted = false
