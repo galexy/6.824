@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"6.824/labgob"
 	"fmt"
 )
 
@@ -22,6 +23,8 @@ type Log interface {
 	insertReplicatedEntries(entries []*LogEntry)
 	lastLogEntry() (index LogIndex, term Term)
 	getEntryAt(index LogIndex) (entry *LogEntry)
+	save(encoder *labgob.LabEncoder) error
+	load(encoder *labgob.LabDecoder) error
 }
 
 type LogImpl struct {
@@ -44,6 +47,7 @@ func (l *LogImpl) append(term Term, command interface{}) (newEntry, prevEntry *L
 	}
 	newEntry = &LogEntry{Index: newIndex, Term: term, Command: command}
 	l.entries = append(l.entries, newEntry)
+	l.rf.persist()
 
 	return
 }
@@ -118,6 +122,8 @@ func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
 
 		DPrintf(l.rf.me, cmpLogger, "Already have %d@T%d, skipping.", entry.Index, entry.Term)
 	}
+
+	l.rf.persist()
 }
 
 func (l *LogImpl) lastLogEntry() (index LogIndex, term Term) {
@@ -127,4 +133,71 @@ func (l *LogImpl) lastLogEntry() (index LogIndex, term Term) {
 
 func (l *LogImpl) getEntryAt(index LogIndex) (entry *LogEntry) {
 	return l.entries[index]
+}
+
+func (l *LogImpl) save(encoder *labgob.LabEncoder) error {
+	numEntries := len(l.entries) - 1
+	if err := encoder.Encode(numEntries); err != nil {
+		return fmt.Errorf("failed to encode num of log entries %v", err)
+	}
+
+	for i, entry := range l.entries {
+		if i == 0 {
+			continue
+		}
+
+		//if err := encoder.Encode(entry.Index); err != nil {
+		//	return fmt.Errorf("failed to encode index of log entry %d: %v", i, err)
+		//}
+		//
+		//if err := encoder.Encode(entry.Term); err != nil {
+		//	return fmt.Errorf("failed to encode term of log entry %d: %v", i, err)
+		//}
+		//
+		//if err := encoder.Encode(entry.Command); err != nil {
+		//	return fmt.Errorf("failed to encode command of log entry %d: %v", i, err)
+		//}
+		if err := encoder.Encode(entry); err != nil {
+			return fmt.Errorf("failed to encode log entry %d: %v", i, err)
+		}
+	}
+
+	DPrintf(l.rf.me, cmpPersist, "saved %d log entries", numEntries)
+
+	return nil
+}
+
+func (l *LogImpl) load(decoder *labgob.LabDecoder) error {
+	var savedNumEntries int
+	if err := decoder.Decode(&savedNumEntries); err != nil {
+		return fmt.Errorf("failed to decode number of log entries %v", err)
+	}
+
+	for i := 0; i < savedNumEntries; i++ {
+		//var savedIndex LogIndex
+		//if err := decoder.Decode(&savedIndex); err != nil {
+		//	return fmt.Errorf("failed to decode index of log entry %d: %v", i+1, err)
+		//}
+		//
+		//var savedTerm Term
+		//if err := decoder.Decode(&savedTerm); err != nil {
+		//	return fmt.Errorf("failed to decode term of log entry %d: %v", i+1, err)
+		//}
+		//
+		//var savedCommand interface{}
+		//if err := decoder.Decode(&savedCommand); err != nil {
+		//	return fmt.Errorf("failed to decode command of log entry %d: %v", i+1, err)
+		//}
+
+		//entry := &LogEntry{Index: savedIndex, Term: savedTerm, Command: savedCommand}
+		savedEntry := LogEntry{}
+		if err := decoder.Decode(&savedEntry); err != nil {
+			return fmt.Errorf("failed to decode of log entry %d: %v", i, err)
+		}
+		l.entries = append(l.entries, &savedEntry)
+	}
+
+	DPrintf(l.rf.me, cmpPersist, "loaded %d log entries", savedNumEntries)
+
+	return nil
 }

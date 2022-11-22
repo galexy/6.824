@@ -47,6 +47,7 @@ func (f *Follower) processIncomingRequestVote(args *RequestVoteArgs, reply *Requ
 	}
 
 	f.rf.votedFor = args.CandidateId
+	f.rf.persist()
 	DPrintf(f.rf.me, cmpFollower, "Granting vote to C%d @ T%d, Resetting Timer", args.CandidateId, args.Term)
 	reply.Term = f.rf.currentTerm
 	reply.VoteGranted = true

@@ -38,6 +38,8 @@ func (c *Candidate) startElection() {
 	c.votes[c.rf.me] = true
 	c.rf.votedFor = c.rf.me
 
+	c.rf.persist()
+
 	DPrintf(c.rf.me, cmpCandidate, "running a campaign(T=%d)", c.rf.currentTerm)
 	for peerId, peer := range c.rf.peers {
 		peerId := ServerId(peerId)
