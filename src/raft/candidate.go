@@ -3,12 +3,14 @@ package raft
 import "fmt"
 
 type RequestVoteArgs struct {
-	Term        int // Candidate's Term
-	CandidateId int // ID of candidate requesting vote
+	Term         int // Candidate's Term
+	CandidateId  int // ID of candidate requesting vote
+	LastLogIndex int // index of Candidate's last log entry
+	LastLogTerm  int // term of Candidate's last log entry
 }
 
 func (args *RequestVoteArgs) String() string {
-	return fmt.Sprintf("C%d, T%d", args.CandidateId, args.Term)
+	return fmt.Sprintf("C=%d, T=%d, LI=%d, LT=%d", args.CandidateId, args.Term, args.LastLogIndex, args.LastLogTerm)
 }
 
 type RequestVoteReply struct {
@@ -31,19 +33,24 @@ func (c *Candidate) isLeader() bool {
 
 func (c *Candidate) startElection() {
 	c.rf.currentTerm += 1
-	c.rf.resetTimer()
+	c.rf.resetElectionTimeout()
 	c.votes = make([]bool, len(c.rf.peers))
 	c.votes[c.rf.me] = true
 	c.rf.votedFor = c.rf.me
 
-	DPrintf(c.rf.me, cmpCandidate, "Calling for election @T%d", c.rf.currentTerm)
+	DPrintf(c.rf.me, cmpCandidate, "running a campaign(T=%d)", c.rf.currentTerm)
 	for peerId, peer := range c.rf.peers {
 		if peerId == c.rf.me {
 			continue
 		}
 
-		go peer.callRequestVote(c.rf.currentTerm, c.rf.me)
+		index, term := c.rf.log.lastLogEntry()
+		go peer.callRequestVote(c.rf.currentTerm, c.rf.me, index, term)
 	}
+}
+
+func (c *Candidate) processTick() {
+	panic("Candidates only process election timeout")
 }
 
 func (c *Candidate) processElectionTimeout() ServerStateMachine {
@@ -53,17 +60,13 @@ func (c *Candidate) processElectionTimeout() ServerStateMachine {
 }
 
 func (c *Candidate) processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
-	DPrintf(c.rf.me, cmpCandidate, "Denying RequestVote from S%d@T%d. Trying to win election.",
+	DPrintf(c.rf.me, cmpCandidate, "Denying RequestVote(S%d, T=%d). Trying to win election.",
 		args.CandidateId, args.Term)
 
 	reply.Term = c.rf.currentTerm
 	reply.VoteGranted = false
 
 	return c
-}
-
-func (c *Candidate) shouldRetryFailedRequestVote(args *RequestVoteArgs) bool {
-	return c.rf.currentTerm == args.Term
 }
 
 func (c *Candidate) processRequestVoteResponse(serverId int, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
@@ -95,8 +98,7 @@ func (c *Candidate) processRequestVoteResponse(serverId int, args *RequestVoteAr
 
 	if totalVotes > len(c.votes)/2 {
 		DPrintf(c.rf.me, cmpCandidate, "Received majority of votes. Promoting to Leader")
-		leader := &Leader{rf: c.rf}
-		go leader.heartbeat()
+		leader := MakeLeader(c.rf)
 
 		return leader
 	}
@@ -113,10 +115,6 @@ func (c *Candidate) processIncomingAppendEntries(args *AppendEntriesArgs, reply 
 	return f
 }
 
-func (c *Candidate) shouldRetryFailedAppendEntries(_ *AppendEntriesArgs) bool {
-	return false
-}
-
 func (c *Candidate) processAppendEntriesResponse(
 	_ int,
 	_ *AppendEntriesArgs,
@@ -124,4 +122,8 @@ func (c *Candidate) processAppendEntriesResponse(
 
 	DPrintf(c.rf.me, cmpCandidate, "Received Stale AppendEntries Response. Ignoring.")
 	return c
+}
+
+func (c *Candidate) processCommand(command interface{}) (index int, term int) {
+	panic("Candidate should not be processing commands!")
 }

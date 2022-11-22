@@ -6,7 +6,6 @@ import (
 )
 
 var debug = false
-var indent = true
 
 func init() {
 	//debugVerbosity = getVerbosity()
@@ -20,14 +19,16 @@ func DPrintf(procId int, topic string, format string, a ...interface{}) {
 	if debug {
 		prefix := ""
 
-		if indent {
-			for i := 0; i <= procId; i++ {
-				prefix = prefix + "\t|"
-			}
-		}
-
-		prefix = prefix + fmt.Sprintf("- [%v] S%d ", string(topic), procId)
+		prefix = prefix + fmt.Sprintf("[S%d][%v] S%d ", procId, string(topic), procId)
 		format = prefix + format
 		log.Printf(format, a...)
+	}
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	} else {
+		return b
 	}
 }

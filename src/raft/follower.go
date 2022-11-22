@@ -8,6 +8,10 @@ func (f *Follower) isLeader() bool {
 	return false
 }
 
+func (f *Follower) processTick() {
+	panic("Followers only process election timeout")
+}
+
 func (f *Follower) processElectionTimeout() ServerStateMachine {
 	DPrintf(f.rf.me, cmpFollower, "Converting to Candidate")
 
@@ -18,8 +22,6 @@ func (f *Follower) processElectionTimeout() ServerStateMachine {
 }
 
 func (f *Follower) processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
-	DPrintf(f.rf.me, cmpFollower, "Vote Requested from C%d@T%d", args.CandidateId, args.Term)
-
 	if f.rf.currentTerm > args.Term {
 		DPrintf(f.rf.me, cmpFollower, "@T%d > C%d@ T%d, Rejecting", f.rf.currentTerm, args.CandidateId, args.Term)
 		reply.Term = f.rf.currentTerm
@@ -34,19 +36,23 @@ func (f *Follower) processIncomingRequestVote(args *RequestVoteArgs, reply *Requ
 		return f
 	}
 
-	// TODO: Add check for candidate log is at least up to date
+	// Check if candidate is at least as up to date (section 5.4)
+	lastIndex, lastTerm := f.rf.log.lastLogEntry()
+	if lastTerm > args.LastLogTerm || (lastTerm == args.LastLogTerm && lastIndex > args.LastLogIndex) {
+		DPrintf(f.rf.me, cmpFollower, "candidate C%d last log %d@T%d < current server %d@T%d, rejecting",
+			args.CandidateId, args.LastLogIndex, args.LastLogTerm, lastIndex, lastTerm)
+		reply.Term = f.rf.currentTerm
+		reply.VoteGranted = false
+		return f
+	}
 
 	f.rf.votedFor = args.CandidateId
 	DPrintf(f.rf.me, cmpFollower, "Granting vote to C%d @ T%d, Resetting Timer", args.CandidateId, args.Term)
 	reply.Term = f.rf.currentTerm
 	reply.VoteGranted = true
-	f.rf.resetTimer()
+	f.rf.resetElectionTimeout()
 
 	return f
-}
-
-func (f *Follower) shouldRetryFailedRequestVote(_ *RequestVoteArgs) bool {
-	return false
 }
 
 func (f *Follower) processRequestVoteResponse(serverId int, args *RequestVoteArgs, _ *RequestVoteReply) ServerStateMachine {
@@ -55,22 +61,55 @@ func (f *Follower) processRequestVoteResponse(serverId int, args *RequestVoteArg
 }
 
 func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine {
+	// Check 1 - Section 5.1 of Raft paper
 	if f.rf.currentTerm > args.Term {
 		DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d < S%d@T%d. Replying false.",
 			args.LeaderId, args.Term, f.rf.me, f.rf.currentTerm)
 		reply.Term = f.rf.currentTerm
 		reply.Success = false
-	} else {
-		DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true.", args.LeaderId, args.Term)
-		reply.Term = f.rf.currentTerm
-		reply.Success = true
-		f.rf.resetTimer()
+		return f
 	}
-	return f
-}
 
-func (f *Follower) shouldRetryFailedAppendEntries(_ *AppendEntriesArgs) bool {
-	return false
+	// Check 2 - Section 5.3 of Raft paper
+	hasPrevEntry, conflictTerm, conflictStartIndex := f.rf.log.hasEntryAt(args.PrevLogIndex, args.PrevLogTerm)
+	if !hasPrevEntry {
+		DPrintf(f.rf.me, cmpFollower, "doesn't have log entries I%d@T%d. Replying false, but resetting election timeout.",
+			args.PrevLogIndex, args.PrevLogTerm)
+		reply.Term = f.rf.currentTerm
+		reply.Success = false
+		reply.ConflictTerm = conflictTerm
+		reply.ConflictFirstIndex = conflictStartIndex
+
+		f.rf.resetElectionTimeout()
+		return f
+	}
+
+	f.rf.log.insertReplicatedEntries(args.Entries)
+
+	// Check 5 - Update Commit Index
+	if f.rf.commitIndex < args.LeaderCommit {
+		var maxEntry = 0
+		if len(args.Entries) == 0 {
+			maxEntry = args.PrevLogIndex
+		} else {
+			maxEntry = args.Entries[len(args.Entries)-1].Index
+		}
+
+		var newCommitIndex = max(maxEntry, args.LeaderCommit)
+
+		DPrintf(f.rf.me, cmpFollower, "leaderCommit %d > commitIndex %d. updating to %d",
+			args.LeaderCommit, f.rf.commitIndex, newCommitIndex)
+
+		f.rf.commitIndex = newCommitIndex
+		go f.rf.applyLog()
+	}
+
+	DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true and resetting election timeout", args.LeaderId, args.Term)
+	reply.Term = f.rf.currentTerm
+	reply.Success = true
+	f.rf.resetElectionTimeout()
+
+	return f
 }
 
 func (f *Follower) processAppendEntriesResponse(
@@ -80,4 +119,8 @@ func (f *Follower) processAppendEntriesResponse(
 
 	DPrintf(f.rf.me, cmpCandidate, "Received Stale AppendEntries Response. Ignoring.")
 	return f
+}
+
+func (f *Follower) processCommand(command interface{}) (index int, term int) {
+	panic("Follower should not be processing commands!")
 }

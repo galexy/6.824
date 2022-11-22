@@ -7,10 +7,10 @@ package raft
 //
 // rf = Make(...)
 //   create a new Raft server.
-// rf.Start(command interface{}) (index, term, isLeader)
+// rf.Start(Command interface{}) (Index, Term, isLeader)
 //   start agreement on a new log entry
-// rf.GetState() (term, isLeader)
-//   ask a Raft for its current term, and whether it thinks it is leader
+// rf.GetState() (Term, isLeader)
+//   ask a Raft for its current Term, and whether it thinks it is leader
 // ApplyMsg
 //   each time a new entry is committed to the log, each Raft peer
 //   should send an ApplyMsg to the service (or tester)
@@ -36,6 +36,9 @@ const (
 	cmpTerm      = "_TERM_"
 	cmpRPC       = "SRVRPC"
 	cmpLeader    = "LEADER"
+	cmpClient    = "CLIENT"
+	cmpLogger    = "LOGGER"
+	cmpCommit    = "COMMIT"
 )
 
 //
@@ -63,15 +66,16 @@ type ApplyMsg struct {
 
 type ServerStateMachine interface {
 	isLeader() bool
+	processTick()
 	processElectionTimeout() ServerStateMachine
 
 	processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
-	shouldRetryFailedRequestVote(args *RequestVoteArgs) bool
 	processRequestVoteResponse(serverId int, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
 
 	processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
-	shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool
 	processAppendEntriesResponse(serverId int, args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
+
+	processCommand(command interface{}) (index int, term int)
 }
 
 //
@@ -80,9 +84,9 @@ type ServerStateMachine interface {
 type Raft struct {
 	// R/O Thread-Safe data
 	peers             []*Peer // Peer nodes that encapsulates RPC endpoints
-	me                int     // this peer's index into peers[]
+	me                int     // this peer's Index into peers[]
 	electionTimeout   time.Duration
-	heartBeatInterval int
+	heartBeatInterval time.Duration
 
 	// Accessed atomically
 	dead int32 // set by Kill()
@@ -92,11 +96,13 @@ type Raft struct {
 	nextElectionTimeout time.Time          // Next election timeout
 	serverStateMachine  ServerStateMachine // Follower, Candidate, Leader State Logic
 	persister           *Persister         // Object to hold this peer's persisted state
-	currentTerm         int                // Latest term server has seen
-	votedFor            int                // Candidate that received vote in current term, -1 is null
+	currentTerm         int                // Latest Term server has seen
+	votedFor            int                // Candidate that received vote in current Term, -1 is null
 
-	commitIndex int // Index of highest log entry known
-	lastApplied int // Index of highest log entry applied to state machine
+	log         Log
+	commitIndex int           // Index of highest log entry known
+	lastApplied int           // Index of highest log entry applied to state machine
+	applyChn    chan ApplyMsg // Channel to apply log entries
 }
 
 // The ticker go routine starts a new election if this peer hasn't received
@@ -107,7 +113,9 @@ func (rf *Raft) ticker() {
 		now := time.Now()
 
 		rf.mu.Lock()
-		if now.After(rf.nextElectionTimeout) {
+		if rf.isLeader() {
+			rf.serverStateMachine.processTick()
+		} else if now.After(rf.nextElectionTimeout) {
 			DPrintf(rf.me, cmpTicker, "Election Timeout (%v) elapsed", rf.electionTimeout)
 
 			rf.serverStateMachine = rf.serverStateMachine.processElectionTimeout()
@@ -116,7 +124,7 @@ func (rf *Raft) ticker() {
 	}
 }
 
-func (rf *Raft) resetTimer() {
+func (rf *Raft) resetElectionTimeout() {
 	// Update the next timeout
 	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
 }
@@ -184,13 +192,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		processIncomingRequestVote(args, reply)
 }
 
-func (rf *Raft) shouldRetryRequestVote(args *RequestVoteArgs) bool {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-	
-	return rf.serverStateMachine.shouldRetryFailedRequestVote(args)
-}
-
 func (rf *Raft) dispatchRequestVoteResponse(peer *Peer, args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -211,13 +212,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		processIncomingAppendEntries(args, reply)
 }
 
-func (rf *Raft) shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
-	return rf.serverStateMachine.shouldRetryFailedAppendEntries(args)
-}
-
 func (rf *Raft) dispatchAppendEntriesResponse(peer *Peer, args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -228,28 +222,57 @@ func (rf *Raft) dispatchAppendEntriesResponse(peer *Peer, args *AppendEntriesArg
 		processAppendEntriesResponse(peer.serverId, args, reply)
 }
 
+func (rf *Raft) applyLog() {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	if rf.commitIndex <= rf.lastApplied {
+		DPrintf(rf.me, cmpCommit, "applyLog should only be called when commitIndex has advanced")
+		panic("applyLog should only be called when commitIndex has advanced")
+	}
+
+	for index := rf.lastApplied + 1; index <= rf.commitIndex; index++ {
+		DPrintf(rf.me, cmpCommit, "applying log index %d", index)
+
+		entry := rf.log.getEntryAt(index)
+		// TODO: get rid of this hack, refactor log to be 1-based index
+		commandIndex := entry.Index + 1
+		msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: commandIndex}
+
+		rf.applyChn <- msg
+		rf.lastApplied = index
+	}
+}
+
 //
 // the service using Raft (e.g. a k/v server) wants to start
-// agreement on the next command to be appended to Raft's log. if this
+// agreement on the next Command to be appended to Raft's log. if this
 // server isn't the leader, returns false. otherwise start the
 // agreement and return immediately. there is no guarantee that this
-// command will ever be committed to the Raft log, since the leader
+// Command will ever be committed to the Raft log, since the leader
 // may fail or lose an election. even if the Raft instance has been killed,
 // this function should return gracefully.
 //
-// the first return value is the index that the command will appear at
+// the first return value is the Index that the Command will appear at
 // if it's ever committed. the second return value is the current
-// term. the third return value is true if this server believes it is
+// Term. the third return value is true if this server believes it is
 // the leader.
 //
-func (rf *Raft) Start(command interface{}) (int, int, bool) {
-	index := -1
-	term := -1
-	isLeader := true
+func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
-	// Your code here (2B).
+	isLeader = rf.isLeader()
+	if !isLeader {
+		// DPrintf(rf.me, cmpClient, "Not leader - rejecting Command(%v)", Command)
+		return
+	}
 
-	return index, term, isLeader
+	index, term = rf.serverStateMachine.processCommand(command)
+
+	// TODO: get rid of this hack, refactor log to be 1-based index
+	index = index + 1
+	return
 }
 
 // return currentTerm and whether this server
@@ -305,11 +328,17 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// Initialize timeouts
 	rf.electionTimeout = time.Duration(rand.Intn(300)+500) * time.Millisecond
-	rf.heartBeatInterval = 110
+	rf.heartBeatInterval = time.Duration(110) * time.Millisecond
 	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
 
 	// initialize server state handler
 	rf.serverStateMachine = &Follower{rf: rf}
+
+	// initialize log
+	rf.log = MakeLog(rf)
+	rf.commitIndex = -1
+	rf.lastApplied = -1
+	rf.applyChn = applyCh
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
