@@ -31,7 +31,8 @@ type LogImpl struct {
 
 func MakeLog(rf *Raft) Log {
 	log := &LogImpl{rf: rf}
-	log.entries = make([]*LogEntry, 0, 1024)
+	log.entries = make([]*LogEntry, 1, 1024)
+	log.entries[0] = &LogEntry{Index: 0, Term: 0, Command: nil}
 
 	return log
 }
@@ -48,24 +49,24 @@ func (l *LogImpl) append(term Term, command interface{}) (newEntry, prevEntry *L
 }
 
 func (l *LogImpl) hasEntryAt(index LogIndex, term Term) (hasEntry bool, conflictTerm Term, conflictTermStartIndex LogIndex) {
-	if index == -1 && term == -1 {
-		return true, -1, -1
-	}
+	//if index == 0 && term == 0 {
+	//	return true, 0, 0
+	//}
 
 	if len(l.entries) <= int(index) {
-		hasEntry = false
-		return false, -1, -1
+		return
 	}
 
 	entryAtIndex := l.entries[index]
-
 	if entryAtIndex.Term == term {
-		return true, -1, -1
+		hasEntry = true
+		return
 	}
 
+	// Find the first index of the conflicting term
+	// TODO: build an map to find these index positions in O(1) time
 	startIndex := index
-	for ; startIndex >= 0 && l.entries[startIndex].Term == entryAtIndex.Term; startIndex-- {
-
+	for ; startIndex > 0 && l.entries[startIndex].Term == entryAtIndex.Term; startIndex-- {
 	}
 	startIndex = startIndex + 1
 
@@ -120,18 +121,10 @@ func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
 }
 
 func (l *LogImpl) lastLogEntry() (index LogIndex, term Term) {
-	if len(l.entries) == 0 {
-		return -1, -1
-	}
-
 	lastEntry := l.entries[len(l.entries)-1]
 	return lastEntry.Index, lastEntry.Term
 }
 
 func (l *LogImpl) getEntryAt(index LogIndex) (entry *LogEntry) {
-	if index == -1 {
-		return nil
-	}
-
 	return l.entries[index]
 }

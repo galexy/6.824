@@ -45,7 +45,7 @@ type ServerId int
 
 type Term int
 
-type LogIndex int
+type LogIndex uint
 
 type ServerStateMachine interface {
 	isLeader() bool
@@ -218,9 +218,7 @@ func (rf *Raft) applyLog() {
 		DPrintf(rf.me, cmpCommit, "applying log index %d", index)
 
 		entry := rf.log.getEntryAt(index)
-		// TODO: get rid of this hack, refactor log to be 1-based index
-		commandIndex := entry.Index + 1
-		msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: int(commandIndex)}
+		msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: int(entry.Index)}
 
 		rf.applyChn <- msg
 		rf.lastApplied = index
@@ -275,9 +273,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	}
 
 	index, term := rf.serverStateMachine.processCommand(command)
-
-	// TODO: get rid of this hack, refactor log to be 1-based index
-	index = index + 1
 	return int(index), int(term), isLeader
 }
 
@@ -342,8 +337,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// initialize log
 	rf.log = MakeLog(rf)
-	rf.commitIndex = -1
-	rf.lastApplied = -1
+	rf.commitIndex = 0
+	rf.lastApplied = 0
 	rf.applyChn = applyCh
 
 	// initialize from state persisted before a crash

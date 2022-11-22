@@ -49,9 +49,6 @@ func MakeLeader(rf *Raft) *Leader {
 		leader.nextIndex[index] = nextIndex
 	}
 	leader.maxIndex = make([]LogIndex, len(rf.peers))
-	for index := range leader.maxIndex {
-		leader.maxIndex[index] = -1
-	}
 	leader.initHeartbeats()
 
 	return leader
@@ -87,17 +84,11 @@ func (l *Leader) processTick() {
 			l.nextHeartbeat[peerId] = now.Add(l.rf.heartBeatInterval)
 
 			// send AppendEntries
-			var prevLogIndex LogIndex = -1
-			var prevLogTerm Term = -1
-			if prevEntry != nil {
-				prevLogIndex = prevEntry.Index
-				prevLogTerm = prevEntry.Term
-			}
 			go l.rf.peers[peerId].callAppendEntries(
 				l.rf.me,
 				l.rf.currentTerm,
-				prevLogIndex,
-				prevLogTerm,
+				prevEntry.Index,
+				prevEntry.Term,
 				entries,
 				l.rf.commitIndex)
 		}
@@ -149,7 +140,7 @@ func (l *Leader) processAppendEntriesResponse(
 
 	// check for log inconsistency
 	if !reply.Success && reply.Term == l.rf.currentTerm {
-		if reply.ConflictFirstIndex == -1 {
+		if reply.ConflictFirstIndex == 0 {
 			nextIndex := l.nextIndex[serverId]
 			DPrintf(l.rf.me, cmpLeader, "decrementing nextIndex(S=%d) to %d", serverId, nextIndex-1)
 			l.nextIndex[serverId] = nextIndex - 1
@@ -221,7 +212,7 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 	for _, max := range l.maxIndex {
 		// if the max index for a peer is below leader commit index, it can't contribute
 		// to a majority that would update commit index, so it's safe to skip
-		if max-start < 0 {
+		if start > max {
 			continue
 		}
 		indexCounts[max-start]++
