@@ -3,10 +3,10 @@ package raft
 import "fmt"
 
 type RequestVoteArgs struct {
-	Term         int // Candidate's Term
-	CandidateId  int // ID of candidate requesting vote
-	LastLogIndex int // index of Candidate's last log entry
-	LastLogTerm  int // term of Candidate's last log entry
+	Term         Term     // Candidate's Term
+	CandidateId  ServerId // ID of candidate requesting vote
+	LastLogIndex LogIndex // index of Candidate's last log entry
+	LastLogTerm  Term     // term of Candidate's last log entry
 }
 
 func (args *RequestVoteArgs) String() string {
@@ -14,7 +14,7 @@ func (args *RequestVoteArgs) String() string {
 }
 
 type RequestVoteReply struct {
-	Term        int  // Current Term of server - for candidate to update itself
+	Term        Term // Current Term of server - for candidate to update itself
 	VoteGranted bool // Reply on whether candidate was granted vote
 }
 
@@ -40,6 +40,7 @@ func (c *Candidate) startElection() {
 
 	DPrintf(c.rf.me, cmpCandidate, "running a campaign(T=%d)", c.rf.currentTerm)
 	for peerId, peer := range c.rf.peers {
+		peerId := ServerId(peerId)
 		if peerId == c.rf.me {
 			continue
 		}
@@ -69,7 +70,7 @@ func (c *Candidate) processIncomingRequestVote(args *RequestVoteArgs, reply *Req
 	return c
 }
 
-func (c *Candidate) processRequestVoteResponse(serverId int, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
+func (c *Candidate) processRequestVoteResponse(serverId ServerId, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
 	if args.Term < c.rf.currentTerm {
 		DPrintf(c.rf.me, cmpCandidate, "Received stale vote S%d @T%d < S%d@T%d. Ignoring.",
 			args.CandidateId, args.Term, c.rf.me, c.rf.currentTerm)
@@ -116,7 +117,7 @@ func (c *Candidate) processIncomingAppendEntries(args *AppendEntriesArgs, reply 
 }
 
 func (c *Candidate) processAppendEntriesResponse(
-	_ int,
+	_ ServerId,
 	_ *AppendEntriesArgs,
 	_ *AppendEntriesReply) ServerStateMachine {
 
@@ -124,6 +125,6 @@ func (c *Candidate) processAppendEntriesResponse(
 	return c
 }
 
-func (c *Candidate) processCommand(command interface{}) (index int, term int) {
+func (c *Candidate) processCommand(command interface{}) (index LogIndex, term Term) {
 	panic("Candidate should not be processing commands!")
 }

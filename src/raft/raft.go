@@ -41,28 +41,11 @@ const (
 	cmpCommit    = "COMMIT"
 )
 
-//
-// as each Raft peer becomes aware that successive log entries are
-// committed, the peer should send an ApplyMsg to the service (or
-// tester) on the same server, via the applyCh passed to Make(). set
-// CommandValid to true to indicate that the ApplyMsg contains a newly
-// committed log entry.
-//
-// in part 2D you'll want to send other kinds of messages (e.g.,
-// snapshots) on the applyCh, but set CommandValid to false for these
-// other uses.
-//
-type ApplyMsg struct {
-	CommandValid bool
-	Command      interface{}
-	CommandIndex int
+type ServerId int
 
-	// For 2D:
-	SnapshotValid bool
-	Snapshot      []byte
-	SnapshotTerm  int
-	SnapshotIndex int
-}
+type Term int
+
+type LogIndex int
 
 type ServerStateMachine interface {
 	isLeader() bool
@@ -70,12 +53,12 @@ type ServerStateMachine interface {
 	processElectionTimeout() ServerStateMachine
 
 	processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
-	processRequestVoteResponse(serverId int, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
+	processRequestVoteResponse(serverId ServerId, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
 
 	processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
-	processAppendEntriesResponse(serverId int, args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
+	processAppendEntriesResponse(serverId ServerId, args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
 
-	processCommand(command interface{}) (index int, term int)
+	processCommand(command interface{}) (index LogIndex, term Term)
 }
 
 //
@@ -83,8 +66,8 @@ type ServerStateMachine interface {
 //
 type Raft struct {
 	// R/O Thread-Safe data
-	peers             []*Peer // Peer nodes that encapsulates RPC endpoints
-	me                int     // this peer's Index into peers[]
+	peers             []*Peer  // Peer nodes that encapsulates RPC endpoints
+	me                ServerId // this peer's Index into peers[]
 	electionTimeout   time.Duration
 	heartBeatInterval time.Duration
 
@@ -96,12 +79,12 @@ type Raft struct {
 	nextElectionTimeout time.Time          // Next election timeout
 	serverStateMachine  ServerStateMachine // Follower, Candidate, Leader State Logic
 	persister           *Persister         // Object to hold this peer's persisted state
-	currentTerm         int                // Latest Term server has seen
-	votedFor            int                // Candidate that received vote in current Term, -1 is null
+	currentTerm         Term               // Latest Term server has seen
+	votedFor            ServerId           // Candidate that received vote in current Term, -1 is null
 
 	log         Log
-	commitIndex int           // Index of highest log entry known
-	lastApplied int           // Index of highest log entry applied to state machine
+	commitIndex LogIndex      // Index of high-est log entry known
+	lastApplied LogIndex      // Index of high-est log entry applied to state machine
 	applyChn    chan ApplyMsg // Channel to apply log entries
 }
 
@@ -129,7 +112,7 @@ func (rf *Raft) resetElectionTimeout() {
 	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
 }
 
-func (rf *Raft) checkTerm(serverId, term int) ServerStateMachine {
+func (rf *Raft) checkTerm(serverId ServerId, term Term) ServerStateMachine {
 	if rf.currentTerm >= term {
 		return rf.serverStateMachine
 	}
@@ -237,11 +220,34 @@ func (rf *Raft) applyLog() {
 		entry := rf.log.getEntryAt(index)
 		// TODO: get rid of this hack, refactor log to be 1-based index
 		commandIndex := entry.Index + 1
-		msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: commandIndex}
+		msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: int(commandIndex)}
 
 		rf.applyChn <- msg
 		rf.lastApplied = index
 	}
+}
+
+//
+// as each Raft peer becomes aware that successive log entries are
+// committed, the peer should send an ApplyMsg to the service (or
+// tester) on the same server, via the applyCh passed to Make(). set
+// CommandValid to true to indicate that the ApplyMsg contains a newly
+// committed log entry.
+//
+// in part 2D you'll want to send other kinds of messages (e.g.,
+// snapshots) on the applyCh, but set CommandValid to false for these
+// other uses.
+//
+type ApplyMsg struct {
+	CommandValid bool
+	Command      interface{}
+	CommandIndex int
+
+	// For 2D:
+	SnapshotValid bool
+	Snapshot      []byte
+	SnapshotTerm  int
+	SnapshotIndex int
 }
 
 //
@@ -258,21 +264,21 @@ func (rf *Raft) applyLog() {
 // Term. the third return value is true if this server believes it is
 // the leader.
 //
-func (rf *Raft) Start(command interface{}) (index int, term int, isLeader bool) {
+func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	isLeader = rf.isLeader()
+	isLeader := rf.isLeader()
 	if !isLeader {
 		// DPrintf(rf.me, cmpClient, "Not leader - rejecting Command(%v)", Command)
-		return
+		return 0, 0, isLeader
 	}
 
-	index, term = rf.serverStateMachine.processCommand(command)
+	index, term := rf.serverStateMachine.processCommand(command)
 
 	// TODO: get rid of this hack, refactor log to be 1-based index
 	index = index + 1
-	return
+	return int(index), int(term), isLeader
 }
 
 // return currentTerm and whether this server
@@ -281,7 +287,7 @@ func (rf *Raft) GetState() (int, bool) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	return rf.currentTerm, rf.isLeader()
+	return int(rf.currentTerm), rf.isLeader()
 }
 
 //
@@ -320,10 +326,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{}
 	for id, peer := range peers {
-		rf.peers = append(rf.peers, &Peer{raft: rf, endPoint: peer, serverId: id})
+		rf.peers = append(rf.peers, &Peer{raft: rf, endPoint: peer, serverId: ServerId(id)})
 	}
 	rf.persister = persister
-	rf.me = me
+	rf.me = ServerId(me)
 	rf.votedFor = -1
 
 	// Initialize timeouts

@@ -5,8 +5,8 @@ import (
 )
 
 type LogEntry struct {
-	Index   int
-	Term    int
+	Index   LogIndex
+	Term    Term
 	Command interface{}
 }
 
@@ -15,13 +15,13 @@ func (l *LogEntry) String() string {
 }
 
 type Log interface {
-	append(term int, command interface{}) (newEntry, prevEntry *LogEntry)
-	hasEntryAt(index int, term int) (hasPrevEntry bool, conflictTerm int, conflictTermStartIndex int)
-	getEntriesFrom(index int) (prevEntry *LogEntry, entries []*LogEntry)
-	nextIndex() int
+	append(term Term, command interface{}) (newEntry, prevEntry *LogEntry)
+	hasEntryAt(index LogIndex, term Term) (hasPrevEntry bool, conflictTerm Term, conflictTermStartIndex LogIndex)
+	getEntriesFrom(index LogIndex) (prevEntry *LogEntry, entries []*LogEntry)
+	nextIndex() LogIndex
 	insertReplicatedEntries(entries []*LogEntry)
-	lastLogEntry() (index, term int)
-	getEntryAt(index int) (entry *LogEntry)
+	lastLogEntry() (index LogIndex, term Term)
+	getEntryAt(index LogIndex) (entry *LogEntry)
 }
 
 type LogImpl struct {
@@ -36,8 +36,8 @@ func MakeLog(rf *Raft) Log {
 	return log
 }
 
-func (l *LogImpl) append(term int, command interface{}) (newEntry, prevEntry *LogEntry) {
-	newIndex := len(l.entries)
+func (l *LogImpl) append(term Term, command interface{}) (newEntry, prevEntry *LogEntry) {
+	newIndex := l.nextIndex()
 	if newIndex > 0 {
 		prevEntry = l.entries[newIndex-1]
 	}
@@ -47,12 +47,12 @@ func (l *LogImpl) append(term int, command interface{}) (newEntry, prevEntry *Lo
 	return
 }
 
-func (l *LogImpl) hasEntryAt(index int, term int) (hasEntry bool, conflictTerm int, conflictTermStartIndex int) {
+func (l *LogImpl) hasEntryAt(index LogIndex, term Term) (hasEntry bool, conflictTerm Term, conflictTermStartIndex LogIndex) {
 	if index == -1 && term == -1 {
 		return true, -1, -1
 	}
 
-	if len(l.entries) <= index {
+	if len(l.entries) <= int(index) {
 		hasEntry = false
 		return false, -1, -1
 	}
@@ -72,21 +72,21 @@ func (l *LogImpl) hasEntryAt(index int, term int) (hasEntry bool, conflictTerm i
 	return false, entryAtIndex.Term, startIndex
 }
 
-func (l *LogImpl) getEntriesFrom(index int) (prevEntry *LogEntry, entries []*LogEntry) {
+func (l *LogImpl) getEntriesFrom(index LogIndex) (prevEntry *LogEntry, entries []*LogEntry) {
 	prevIndex := index - 1
 	if prevIndex >= 0 {
 		prevEntry = l.entries[prevIndex]
 	}
 
-	if index < len(l.entries) {
+	if int(index) < len(l.entries) {
 		entries = l.entries[index:]
 	}
 
 	return
 }
 
-func (l *LogImpl) nextIndex() int {
-	return len(l.entries)
+func (l *LogImpl) nextIndex() LogIndex {
+	return LogIndex(len(l.entries))
 }
 
 func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
@@ -119,7 +119,7 @@ func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
 	}
 }
 
-func (l *LogImpl) lastLogEntry() (index, term int) {
+func (l *LogImpl) lastLogEntry() (index LogIndex, term Term) {
 	if len(l.entries) == 0 {
 		return -1, -1
 	}
@@ -128,7 +128,7 @@ func (l *LogImpl) lastLogEntry() (index, term int) {
 	return lastEntry.Index, lastEntry.Term
 }
 
-func (l *LogImpl) getEntryAt(index int) (entry *LogEntry) {
+func (l *LogImpl) getEntryAt(index LogIndex) (entry *LogEntry) {
 	if index == -1 {
 		return nil
 	}

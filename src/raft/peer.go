@@ -7,10 +7,10 @@ import (
 type Peer struct {
 	raft     *Raft
 	endPoint *labrpc.ClientEnd
-	serverId int
+	serverId ServerId
 }
 
-func (p *Peer) callRequestVote(term, candidate, lastLogIndex, lastLogTerm int) {
+func (p *Peer) callRequestVote(term Term, candidate ServerId, lastLogIndex LogIndex, lastLogTerm Term) {
 	args := &RequestVoteArgs{Term: term, CandidateId: candidate, LastLogIndex: lastLogIndex, LastLogTerm: lastLogTerm}
 	reply := &RequestVoteReply{}
 
@@ -23,7 +23,9 @@ func (p *Peer) callRequestVote(term, candidate, lastLogIndex, lastLogTerm int) {
 	p.raft.dispatchRequestVoteResponse(p, args, reply)
 }
 
-func (p *Peer) callAppendEntries(leaderId int, term int, prevLogIndex, prevLogTerm int, entries []*LogEntry, leaderCommit int) {
+func (p *Peer) callAppendEntries(leaderId ServerId, term Term, prevLogIndex LogIndex,
+	prevLogTerm Term, entries []*LogEntry, leaderCommit LogIndex) {
+
 	args := &AppendEntriesArgs{
 		LeaderId:     leaderId,
 		Term:         term,

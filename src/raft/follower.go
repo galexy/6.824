@@ -55,7 +55,7 @@ func (f *Follower) processIncomingRequestVote(args *RequestVoteArgs, reply *Requ
 	return f
 }
 
-func (f *Follower) processRequestVoteResponse(serverId int, args *RequestVoteArgs, _ *RequestVoteReply) ServerStateMachine {
+func (f *Follower) processRequestVoteResponse(serverId ServerId, args *RequestVoteArgs, _ *RequestVoteReply) ServerStateMachine {
 	DPrintf(f.rf.me, cmpFollower, "<~~~ S%d Stale Response to RequestVote(%v). Ignoring", serverId, args)
 	return f
 }
@@ -88,7 +88,7 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 
 	// Check 5 - Update Commit Index
 	if f.rf.commitIndex < args.LeaderCommit {
-		var maxEntry = 0
+		var maxEntry LogIndex = 0
 		if len(args.Entries) == 0 {
 			maxEntry = args.PrevLogIndex
 		} else {
@@ -113,7 +113,7 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 }
 
 func (f *Follower) processAppendEntriesResponse(
-	_ int,
+	_ ServerId,
 	_ *AppendEntriesArgs,
 	_ *AppendEntriesReply) ServerStateMachine {
 
@@ -121,6 +121,6 @@ func (f *Follower) processAppendEntriesResponse(
 	return f
 }
 
-func (f *Follower) processCommand(command interface{}) (index int, term int) {
+func (f *Follower) processCommand(command interface{}) (index LogIndex, term Term) {
 	panic("Follower should not be processing commands!")
 }

@@ -6,12 +6,12 @@ import (
 )
 
 type AppendEntriesArgs struct {
-	Term         int // Leader's Term
-	LeaderId     int
-	PrevLogIndex int
-	PrevLogTerm  int
+	Term         Term // Leader's Term
+	LeaderId     ServerId
+	PrevLogIndex LogIndex
+	PrevLogTerm  Term
 	Entries      []*LogEntry
-	LeaderCommit int
+	LeaderCommit LogIndex
 }
 
 func (a *AppendEntriesArgs) String() string {
@@ -24,10 +24,10 @@ func (a *AppendEntriesArgs) isHeartbeat() bool {
 }
 
 type AppendEntriesReply struct {
-	Term               int // currentTerm, for leader to update itself
+	Term               Term // currentTerm, for leader to update itself
 	Success            bool
-	ConflictTerm       int
-	ConflictFirstIndex int
+	ConflictTerm       Term
+	ConflictFirstIndex LogIndex
 }
 
 func (r *AppendEntriesReply) String() string {
@@ -36,19 +36,19 @@ func (r *AppendEntriesReply) String() string {
 
 type Leader struct {
 	rf            *Raft       // Reference to main raft
-	nextIndex     []int       // for each peer, Index of the next log entry to send that server
-	maxIndex      []int       // for each server Index of the highest known replicated log entry
+	nextIndex     []LogIndex  // for each peer, Index of the next log entry to send that server
+	maxIndex      []LogIndex  // for each server Index of the highest known replicated log entry
 	nextHeartbeat []time.Time // For each peer, when will next heartbeat expire
 }
 
 func MakeLeader(rf *Raft) *Leader {
 	leader := &Leader{rf: rf}
-	leader.nextIndex = make([]int, len(rf.peers))
+	leader.nextIndex = make([]LogIndex, len(rf.peers))
 	nextIndex := rf.log.nextIndex()
 	for index := range leader.nextIndex {
 		leader.nextIndex[index] = nextIndex
 	}
-	leader.maxIndex = make([]int, len(rf.peers))
+	leader.maxIndex = make([]LogIndex, len(rf.peers))
 	for index := range leader.maxIndex {
 		leader.maxIndex[index] = -1
 	}
@@ -74,6 +74,8 @@ func (l *Leader) processTick() {
 	now := time.Now()
 
 	for peerId, beat := range l.nextHeartbeat {
+		peerId := ServerId(peerId)
+
 		if peerId == l.rf.me {
 			continue
 		}
@@ -85,8 +87,8 @@ func (l *Leader) processTick() {
 			l.nextHeartbeat[peerId] = now.Add(l.rf.heartBeatInterval)
 
 			// send AppendEntries
-			prevLogIndex := -1
-			prevLogTerm := -1
+			var prevLogIndex LogIndex = -1
+			var prevLogTerm Term = -1
 			if prevEntry != nil {
 				prevLogIndex = prevEntry.Index
 				prevLogTerm = prevEntry.Term
@@ -116,7 +118,7 @@ func (l *Leader) processIncomingRequestVote(args *RequestVoteArgs, reply *Reques
 	return l
 }
 
-func (l *Leader) processRequestVoteResponse(serverId int, args *RequestVoteArgs, _ *RequestVoteReply) ServerStateMachine {
+func (l *Leader) processRequestVoteResponse(serverId ServerId, args *RequestVoteArgs, _ *RequestVoteReply) ServerStateMachine {
 	DPrintf(l.rf.me, cmpLeader, "Ignoring RequestVote Response from S%d@T%d. Already Leader",
 		serverId, args.Term)
 
@@ -139,7 +141,7 @@ func (l *Leader) processIncomingAppendEntries(args *AppendEntriesArgs, reply *Ap
 }
 
 func (l *Leader) processAppendEntriesResponse(
-	serverId int,
+	serverId ServerId,
 	args *AppendEntriesArgs,
 	reply *AppendEntriesReply) ServerStateMachine {
 
@@ -165,11 +167,11 @@ func (l *Leader) processAppendEntriesResponse(
 	return l
 }
 
-func (l *Leader) updateIndexes(serverId int, args *AppendEntriesArgs) {
+func (l *Leader) updateIndexes(serverId ServerId, args *AppendEntriesArgs) {
 	currentNextIndex := l.nextIndex[serverId]
 	currentMaxIndex := l.maxIndex[serverId]
 
-	var newNextIndex, newMaxIndex int
+	var newNextIndex, newMaxIndex LogIndex
 	if args.isHeartbeat() {
 		// with a heart, the follower only confirms prevLogIndex
 		newNextIndex = args.PrevLogIndex + 1
@@ -255,7 +257,7 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 	return false
 }
 
-func (l *Leader) processCommand(command interface{}) (index int, term int) {
+func (l *Leader) processCommand(command interface{}) (index LogIndex, term Term) {
 	newEntry, _ := l.rf.log.append(l.rf.currentTerm, command)
 	DPrintf(l.rf.me, cmpLeader, "enqueue(Command=%v,I=%d,T%d)",
 		command, newEntry.Index, newEntry.Term)
