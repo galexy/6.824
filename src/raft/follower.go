@@ -55,10 +55,6 @@ func (f *Follower) processIncomingRequestVote(args *RequestVoteArgs, reply *Requ
 	return f
 }
 
-func (f *Follower) shouldRetryFailedRequestVote(_ *RequestVoteArgs) bool {
-	return false
-}
-
 func (f *Follower) processRequestVoteResponse(serverId int, args *RequestVoteArgs, _ *RequestVoteReply) ServerStateMachine {
 	DPrintf(f.rf.me, cmpFollower, "<~~~ S%d Stale Response to RequestVote(%v). Ignoring", serverId, args)
 	return f
@@ -114,10 +110,6 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 	f.rf.resetElectionTimeout()
 
 	return f
-}
-
-func (f *Follower) shouldRetryFailedAppendEntries(_ *AppendEntriesArgs) bool {
-	return false
 }
 
 func (f *Follower) processAppendEntriesResponse(

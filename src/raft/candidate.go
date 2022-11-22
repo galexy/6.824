@@ -69,10 +69,6 @@ func (c *Candidate) processIncomingRequestVote(args *RequestVoteArgs, reply *Req
 	return c
 }
 
-func (c *Candidate) shouldRetryFailedRequestVote(args *RequestVoteArgs) bool {
-	return c.rf.currentTerm == args.Term
-}
-
 func (c *Candidate) processRequestVoteResponse(serverId int, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
 	if args.Term < c.rf.currentTerm {
 		DPrintf(c.rf.me, cmpCandidate, "Received stale vote S%d @T%d < S%d@T%d. Ignoring.",
@@ -117,10 +113,6 @@ func (c *Candidate) processIncomingAppendEntries(args *AppendEntriesArgs, reply 
 	f := &Follower{rf: c.rf}
 	f.processIncomingAppendEntries(args, reply)
 	return f
-}
-
-func (c *Candidate) shouldRetryFailedAppendEntries(_ *AppendEntriesArgs) bool {
-	return false
 }
 
 func (c *Candidate) processAppendEntriesResponse(

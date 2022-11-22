@@ -15,15 +15,9 @@ func (p *Peer) callRequestVote(term, candidate, lastLogIndex, lastLogTerm int) {
 	reply := &RequestVoteReply{}
 
 	DPrintf(p.raft.me, cmpRPC, "=-=> S%d Send RequestVote(%v)", p.serverId, args)
-	for !p.endPoint.Call("Raft.RequestVote", args, reply) {
+	if !p.endPoint.Call("Raft.RequestVote", args, reply) {
 		DPrintf(p.raft.me, cmpRPC, "=/=> S%d Failed RequestVote()", p.serverId)
-
-		if p.raft.shouldRetryRequestVote(args) {
-			DPrintf(p.raft.me, cmpRPC, "=~=> S%d Retrying RequestVote())", p.serverId)
-		} else {
-			DPrintf(p.raft.me, cmpRPC, "=/=> S%d Dropping RequestVote()", p)
-			return
-		}
+		return
 	}
 
 	p.raft.dispatchRequestVoteResponse(p, args, reply)
@@ -41,15 +35,9 @@ func (p *Peer) callAppendEntries(leaderId int, term int, prevLogIndex, prevLogTe
 	reply := &AppendEntriesReply{}
 
 	DPrintf(p.raft.me, cmpRPC, "=-=> S%d Send AppendEntries(%v)", p.serverId, args)
-	for !p.endPoint.Call("Raft.AppendEntries", args, reply) {
+	if !p.endPoint.Call("Raft.AppendEntries", args, reply) {
 		DPrintf(p.raft.me, cmpRPC, "=/=> S%d Failed AppendEntries()", p.serverId)
-
-		if p.raft.shouldRetryFailedAppendEntries(args) {
-			DPrintf(p.raft.me, cmpRPC, "=~=> S%d Retrying AppendEntries())", p.serverId)
-		} else {
-			DPrintf(p.raft.me, cmpRPC, "=/=> S%d Dropping AppendEntries()", p)
-			return
-		}
+		return
 	}
 
 	p.raft.dispatchAppendEntriesResponse(p, args, reply)

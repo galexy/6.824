@@ -138,14 +138,6 @@ func (l *Leader) processIncomingAppendEntries(args *AppendEntriesArgs, reply *Ap
 	return l
 }
 
-func (l *Leader) shouldRetryFailedRequestVote(_ *RequestVoteArgs) bool {
-	return false
-}
-
-func (l *Leader) shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool {
-	return args.Term == l.rf.currentTerm && !args.isHeartbeat()
-}
-
 func (l *Leader) processAppendEntriesResponse(
 	serverId int,
 	args *AppendEntriesArgs,

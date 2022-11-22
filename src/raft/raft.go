@@ -70,11 +70,9 @@ type ServerStateMachine interface {
 	processElectionTimeout() ServerStateMachine
 
 	processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
-	shouldRetryFailedRequestVote(args *RequestVoteArgs) bool
 	processRequestVoteResponse(serverId int, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine
 
 	processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
-	shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool
 	processAppendEntriesResponse(serverId int, args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
 
 	processCommand(command interface{}) (index int, term int)
@@ -194,13 +192,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		processIncomingRequestVote(args, reply)
 }
 
-func (rf *Raft) shouldRetryRequestVote(args *RequestVoteArgs) bool {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
-	return rf.serverStateMachine.shouldRetryFailedRequestVote(args)
-}
-
 func (rf *Raft) dispatchRequestVoteResponse(peer *Peer, args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -219,13 +210,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.serverStateMachine = rf.
 		checkTerm(args.LeaderId, args.Term).
 		processIncomingAppendEntries(args, reply)
-}
-
-func (rf *Raft) shouldRetryFailedAppendEntries(args *AppendEntriesArgs) bool {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
-	return rf.serverStateMachine.shouldRetryFailedAppendEntries(args)
 }
 
 func (rf *Raft) dispatchAppendEntriesResponse(peer *Peer, args *AppendEntriesArgs, reply *AppendEntriesReply) {
