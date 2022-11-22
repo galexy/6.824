@@ -1,6 +1,8 @@
 package raft
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type LogEntry struct {
 	Index   int
@@ -14,7 +16,7 @@ func (l *LogEntry) String() string {
 
 type Log interface {
 	append(term int, command interface{}) (newEntry, prevEntry *LogEntry)
-	hasEntryAt(index int, term int) bool
+	hasEntryAt(index int, term int) (hasPrevEntry bool, conflictTerm int, conflictTermStartIndex int)
 	getEntriesFrom(index int) (prevEntry *LogEntry, entries []*LogEntry)
 	nextIndex() int
 	insertReplicatedEntries(entries []*LogEntry)
@@ -45,12 +47,29 @@ func (l *LogImpl) append(term int, command interface{}) (newEntry, prevEntry *Lo
 	return
 }
 
-func (l *LogImpl) hasEntryAt(index int, term int) bool {
+func (l *LogImpl) hasEntryAt(index int, term int) (hasEntry bool, conflictTerm int, conflictTermStartIndex int) {
 	if index == -1 && term == -1 {
-		return true
+		return true, -1, -1
 	}
 
-	return index >= 0 && len(l.entries) > index && l.entries[index].Term == term
+	if len(l.entries) <= index {
+		hasEntry = false
+		return false, -1, -1
+	}
+
+	entryAtIndex := l.entries[index]
+
+	if entryAtIndex.Term == term {
+		return true, -1, -1
+	}
+
+	startIndex := index
+	for ; startIndex >= 0 && l.entries[startIndex].Term == entryAtIndex.Term; startIndex-- {
+
+	}
+	startIndex = startIndex + 1
+
+	return false, entryAtIndex.Term, startIndex
 }
 
 func (l *LogImpl) getEntriesFrom(index int) (prevEntry *LogEntry, entries []*LogEntry) {

@@ -75,11 +75,16 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 	}
 
 	// Check 2 - Section 5.3 of Raft paper
-	if !f.rf.log.hasEntryAt(args.PrevLogIndex, args.PrevLogTerm) {
-		DPrintf(f.rf.me, cmpFollower, "doesn't have log entries I%d@T%d. Replying false.",
+	hasPrevEntry, conflictTerm, conflictStartIndex := f.rf.log.hasEntryAt(args.PrevLogIndex, args.PrevLogTerm)
+	if !hasPrevEntry {
+		DPrintf(f.rf.me, cmpFollower, "doesn't have log entries I%d@T%d. Replying false, but resetting election timeout.",
 			args.PrevLogIndex, args.PrevLogTerm)
 		reply.Term = f.rf.currentTerm
 		reply.Success = false
+		reply.ConflictTerm = conflictTerm
+		reply.ConflictFirstIndex = conflictStartIndex
+
+		f.rf.resetElectionTimeout()
 		return f
 	}
 
@@ -103,7 +108,7 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 		go f.rf.applyLog()
 	}
 
-	DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true.", args.LeaderId, args.Term)
+	DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true and resetting election timeout", args.LeaderId, args.Term)
 	reply.Term = f.rf.currentTerm
 	reply.Success = true
 	f.rf.resetElectionTimeout()

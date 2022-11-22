@@ -24,8 +24,10 @@ func (a *AppendEntriesArgs) isHeartbeat() bool {
 }
 
 type AppendEntriesReply struct {
-	Term    int // currentTerm, for leader to update itself
-	Success bool
+	Term               int // currentTerm, for leader to update itself
+	Success            bool
+	ConflictTerm       int
+	ConflictFirstIndex int
 }
 
 func (r *AppendEntriesReply) String() string {
@@ -153,9 +155,14 @@ func (l *Leader) processAppendEntriesResponse(
 
 	// check for log inconsistency
 	if !reply.Success && reply.Term == l.rf.currentTerm {
-		nextIndex := l.nextIndex[serverId]
-		DPrintf(l.rf.me, cmpLeader, "decrementing nextIndex(S=%d) to %d", serverId, nextIndex-1)
-		l.nextIndex[serverId] = nextIndex - 1
+		if reply.ConflictFirstIndex == -1 {
+			nextIndex := l.nextIndex[serverId]
+			DPrintf(l.rf.me, cmpLeader, "decrementing nextIndex(S=%d) to %d", serverId, nextIndex-1)
+			l.nextIndex[serverId] = nextIndex - 1
+		} else {
+			DPrintf(l.rf.me, cmpLeader, "jumping nextIndex(S=%d) back to %d", serverId, reply.ConflictFirstIndex)
+			l.nextIndex[serverId] = reply.ConflictFirstIndex
+		}
 
 		return l
 	}

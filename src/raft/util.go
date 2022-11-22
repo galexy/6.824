@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-var debug = true
+var debug = false
 
 func init() {
 	//debugVerbosity = getVerbosity()
