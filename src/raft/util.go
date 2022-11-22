@@ -15,17 +15,17 @@ func init() {
 	log.SetFlags(log.Flags() | log.Lmicroseconds)
 }
 
-func DPrintf(procId int, topic string, format string, a ...interface{}) {
+func DPrintf(serverId ServerId, topic string, format string, a ...interface{}) {
 	if debug {
 		prefix := ""
 
-		prefix = prefix + fmt.Sprintf("[S%d][%v] S%d ", procId, string(topic), procId)
+		prefix = prefix + fmt.Sprintf("[S%d][%v] S%d ", serverId, string(topic), serverId)
 		format = prefix + format
 		log.Printf(format, a...)
 	}
 }
 
-func max(a, b int) int {
+func max(a, b LogIndex) LogIndex {
 	if a > b {
 		return a
 	} else {
