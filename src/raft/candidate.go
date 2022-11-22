@@ -127,6 +127,6 @@ func (c *Candidate) processAppendEntriesResponse(
 	return c
 }
 
-func (c *Candidate) processCommand(command interface{}) (index LogIndex, term Term) {
+func (c *Candidate) processCommand(_ interface{}) (index LogIndex, term Term) {
 	panic("Candidate should not be processing commands!")
 }

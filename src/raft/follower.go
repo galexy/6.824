@@ -122,6 +122,6 @@ func (f *Follower) processAppendEntriesResponse(
 	return f
 }
 
-func (f *Follower) processCommand(command interface{}) (index LogIndex, term Term) {
+func (f *Follower) processCommand(_ interface{}) (index LogIndex, term Term) {
 	panic("Follower should not be processing commands!")
 }

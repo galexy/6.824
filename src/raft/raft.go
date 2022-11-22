@@ -50,6 +50,8 @@ type Term int
 
 type LogIndex uint
 
+// ServerStateMachine defines an interface for /State Pattern/ objects
+// that handle events in the distinct server states Follower, Candidate, and Leader.
 type ServerStateMachine interface {
 	isLeader() bool
 	processTick()
@@ -65,7 +67,7 @@ type ServerStateMachine interface {
 }
 
 //
-// A Go object implementing a single Raft peer.
+// A Raft object represents a single peer in a cluster
 //
 type Raft struct {
 	// R/O Thread-Safe data
@@ -242,16 +244,10 @@ func (rf *Raft) applyLog() {
 }
 
 //
-// as each Raft peer becomes aware that successive log entries are
-// committed, the peer should send an ApplyMsg to the service (or
-// tester) on the same server, via the applyCh passed to Make(). set
-// CommandValid to true to indicate that the ApplyMsg contains a newly
-// committed log entry.
-//
-// in part 2D you'll want to send other kinds of messages (e.g.,
-// snapshots) on the applyCh, but set CommandValid to false for these
-// other uses.
-//
+// ApplyMsg is the payload that each Raft peer uses to single to the server
+// as it becomes aware that successive log entries are committed via the applyCh
+// passed to Make(). CommandValid is true to indicate that the ApplyMsg contains
+//a newly committed log entry and false for other types of messages.
 type ApplyMsg struct {
 	CommandValid bool
 	Command      interface{}
