@@ -53,12 +53,8 @@ func (l *LogImpl) append(term Term, command interface{}) (newEntry, prevEntry *L
 }
 
 func (l *LogImpl) hasEntryAt(index LogIndex, term Term) (hasEntry bool, conflictTerm Term, conflictTermStartIndex LogIndex) {
-	//if index == 0 && term == 0 {
-	//	return true, 0, 0
-	//}
-
 	if len(l.entries) <= int(index) {
-		return
+		panic("Not expected")
 	}
 
 	entryAtIndex := l.entries[index]
@@ -68,13 +64,18 @@ func (l *LogImpl) hasEntryAt(index LogIndex, term Term) (hasEntry bool, conflict
 	}
 
 	// Find the first index of the conflicting term
-	// TODO: build an map to find these index positions in O(1) time
-	startIndex := index
-	for ; startIndex > 0 && l.entries[startIndex].Term == entryAtIndex.Term; startIndex-- {
-	}
-	startIndex = startIndex + 1
+	startIndex := l.findTermStart(entryAtIndex)
 
 	return false, entryAtIndex.Term, startIndex
+}
+
+func (l *LogImpl) findTermStart(entry *LogEntry) (startIndex LogIndex) {
+	// TODO: build an map to find these index positions in O(1) time
+	startIndex = entry.Index
+	for ; startIndex > 0 && l.entries[startIndex].Term == entry.Term; startIndex-- {
+	}
+	startIndex = startIndex + 1
+	return startIndex
 }
 
 func (l *LogImpl) getEntriesFrom(index LogIndex) (prevEntry *LogEntry, entries []*LogEntry) {

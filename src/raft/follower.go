@@ -62,32 +62,50 @@ func (f *Follower) processRequestVoteResponse(serverId ServerId, args *RequestVo
 }
 
 func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine {
-	// Check 1 - Section 5.1 of Raft paper
+	reply.Term = f.rf.currentTerm
+
+	// Check 1 - Is the AppendEntry from current leader Section 5.1 of Raft paper
 	if f.rf.currentTerm > args.Term {
 		DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d < S%d@T%d. Replying false.",
 			args.LeaderId, args.Term, f.rf.me, f.rf.currentTerm)
-		reply.Term = f.rf.currentTerm
 		reply.Success = false
 		return f
 	}
 
+	// Received AppendEntries from current leader, reset election timer
+	defer f.rf.resetElectionTimeout()
+
 	// Check 2 - Section 5.3 of Raft paper
+	// Case 1 - log is shorter than prevLogIndex. In that case, tell leader where log next index is
+	// Case 2 - entry at prevLogIndex conflicts, tell leader where start of term is
+	logNextIndex := f.rf.log.nextIndex()
+	if logNextIndex <= args.PrevLogIndex {
+		DPrintf(f.rf.me, cmpFollower, "log is shorter than %d. Telling leader to rewind to %d.",
+			args.PrevLogIndex, logNextIndex)
+		reply.Success = false
+		reply.RewindIndex = logNextIndex
+		return f
+	}
+
 	hasPrevEntry, conflictTerm, conflictStartIndex := f.rf.log.hasEntryAt(args.PrevLogIndex, args.PrevLogTerm)
 	if !hasPrevEntry {
-		DPrintf(f.rf.me, cmpFollower, "doesn't have log entries I%d@T%d. Replying false, but resetting election timeout.",
-			args.PrevLogIndex, args.PrevLogTerm)
-		reply.Term = f.rf.currentTerm
+		DPrintf(f.rf.me, cmpFollower, "log entry at %d has conflicting term T%d!=T%d. Replying false, but resetting election timeout.",
+			args.PrevLogIndex, conflictTerm, args.PrevLogTerm)
 		reply.Success = false
-		reply.ConflictTerm = conflictTerm
-		reply.ConflictFirstIndex = conflictStartIndex
-
-		f.rf.resetElectionTimeout()
+		reply.RewindIndex = conflictStartIndex
 		return f
 	}
 
 	f.rf.log.insertReplicatedEntries(args.Entries)
+	f.updateCommitIndex(args)
 
-	// Check 5 - Update Commit Index
+	DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true and resetting election timeout", args.LeaderId, args.Term)
+	reply.Success = true
+
+	return f
+}
+
+func (f *Follower) updateCommitIndex(args *AppendEntriesArgs) {
 	if f.rf.commitIndex < args.LeaderCommit {
 		var maxEntry LogIndex = 0
 		if len(args.Entries) == 0 {
@@ -104,13 +122,6 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 		f.rf.commitIndex = newCommitIndex
 		go f.rf.applyLog()
 	}
-
-	DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true and resetting election timeout", args.LeaderId, args.Term)
-	reply.Term = f.rf.currentTerm
-	reply.Success = true
-	f.rf.resetElectionTimeout()
-
-	return f
 }
 
 func (f *Follower) processAppendEntriesResponse(

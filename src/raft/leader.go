@@ -15,8 +15,15 @@ type AppendEntriesArgs struct {
 }
 
 func (a *AppendEntriesArgs) String() string {
+	var entries = ""
+	if len(a.Entries) <= 3 {
+		entries = fmt.Sprintf("%v", a.Entries)
+	} else {
+		entries = fmt.Sprintf("[%v...%v]", a.Entries[0], a.Entries[len(a.Entries)-1])
+	}
+
 	return fmt.Sprintf("L=%d, T=%d, PI=%d, PT=%d, LC=%d, c=%v",
-		a.LeaderId, a.Term, a.PrevLogIndex, a.PrevLogTerm, a.LeaderCommit, a.Entries)
+		a.LeaderId, a.Term, a.PrevLogIndex, a.PrevLogTerm, a.LeaderCommit, entries)
 }
 
 func (a *AppendEntriesArgs) isHeartbeat() bool {
@@ -24,10 +31,10 @@ func (a *AppendEntriesArgs) isHeartbeat() bool {
 }
 
 type AppendEntriesReply struct {
-	Term               Term // currentTerm, for leader to update itself
-	Success            bool
-	ConflictTerm       Term
-	ConflictFirstIndex LogIndex
+	Term    Term // currentTerm, for leader to update itself
+	Success bool
+	//	ConflictTerm       Term
+	RewindIndex LogIndex
 }
 
 func (r *AppendEntriesReply) String() string {
@@ -140,13 +147,13 @@ func (l *Leader) processAppendEntriesResponse(
 
 	// check for log inconsistency
 	if !reply.Success && reply.Term == l.rf.currentTerm {
-		if reply.ConflictFirstIndex == 0 {
+		if reply.RewindIndex == 0 {
 			nextIndex := l.nextIndex[serverId]
 			DPrintf(l.rf.me, cmpLeader, "decrementing nextIndex(S=%d) to %d", serverId, nextIndex-1)
 			l.nextIndex[serverId] = nextIndex - 1
 		} else {
-			DPrintf(l.rf.me, cmpLeader, "jumping nextIndex(S=%d) back to %d", serverId, reply.ConflictFirstIndex)
-			l.nextIndex[serverId] = reply.ConflictFirstIndex
+			DPrintf(l.rf.me, cmpLeader, "jumping nextIndex(S=%d) back to %d", serverId, reply.RewindIndex)
+			l.nextIndex[serverId] = reply.RewindIndex
 		}
 
 		return l
