@@ -228,8 +228,8 @@ func (rf *Raft) applyLog() {
 	defer rf.mu.Unlock()
 
 	if rf.commitIndex <= rf.lastApplied {
-		DPrintf(rf.me, cmpCommit, "applyLog should only be called when commitIndex has advanced")
-		panic("applyLog should only be called when commitIndex has advanced")
+		DPrintf(rf.me, cmpCommit, "applyLog appears to be called after logs have been applied")
+		return
 	}
 
 	for index := rf.lastApplied + 1; index <= rf.commitIndex; index++ {
