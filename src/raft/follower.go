@@ -96,8 +96,13 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 		return f
 	}
 
-	f.rf.log.insertReplicatedEntries(args.Entries)
-	f.updateCommitIndex(args)
+	if len(args.Entries) > 0 {
+		f.rf.log.insertReplicatedEntries(args.Entries)
+	}
+
+	if f.rf.commitIndex < args.LeaderCommit {
+		f.updateCommitIndex(args)
+	}
 
 	DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d. Replying true and resetting election timeout", args.LeaderId, args.Term)
 	reply.Success = true
@@ -106,22 +111,20 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 }
 
 func (f *Follower) updateCommitIndex(args *AppendEntriesArgs) {
-	if f.rf.commitIndex < args.LeaderCommit {
-		var maxEntry LogIndex = 0
-		if len(args.Entries) == 0 {
-			maxEntry = args.PrevLogIndex
-		} else {
-			maxEntry = args.Entries[len(args.Entries)-1].Index
-		}
-
-		var newCommitIndex = min(maxEntry, args.LeaderCommit)
-
-		DPrintf(f.rf.me, cmpFollower, "leaderCommit %d > commitIndex %d. updating to %d",
-			args.LeaderCommit, f.rf.commitIndex, newCommitIndex)
-
-		f.rf.commitIndex = newCommitIndex
-		go f.rf.applyLog()
+	var maxEntry LogIndex = 0
+	if len(args.Entries) == 0 {
+		maxEntry = args.PrevLogIndex
+	} else {
+		maxEntry = args.Entries[len(args.Entries)-1].Index
 	}
+
+	var newCommitIndex = min(maxEntry, args.LeaderCommit)
+
+	DPrintf(f.rf.me, cmpFollower, "leaderCommit %d > commitIndex %d. updating to %d",
+		args.LeaderCommit, f.rf.commitIndex, newCommitIndex)
+
+	f.rf.commitIndex = newCommitIndex
+	go f.rf.applyLog()
 }
 
 func (f *Follower) processAppendEntriesResponse(

@@ -23,8 +23,9 @@ func (r *RequestVoteReply) String() string {
 }
 
 type Candidate struct {
-	rf    *Raft
-	votes []bool
+	rf        *Raft
+	votes     []bool
+	campaigns int
 }
 
 func (c *Candidate) isLeader() bool {
@@ -33,10 +34,18 @@ func (c *Candidate) isLeader() bool {
 
 func (c *Candidate) startElection() {
 	c.rf.currentTerm += 1
-	c.rf.resetElectionTimeout()
 	c.votes = make([]bool, len(c.rf.peers))
 	c.votes[c.rf.me] = true
 	c.rf.votedFor = c.rf.me
+	c.campaigns++
+
+	if c.campaigns > 3 {
+		// we are possibly in a deadlock for election due to timeouts
+		// being in lock step
+		c.rf.jitter()
+	}
+
+	c.rf.resetElectionTimeout()
 
 	c.rf.persist()
 

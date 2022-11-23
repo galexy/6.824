@@ -112,6 +112,12 @@ func (rf *Raft) ticker() {
 	}
 }
 
+func (rf *Raft) jitter() {
+	timeout := time.Duration(rand.Intn(300)+500) * time.Millisecond
+	DPrintf(rf.me, cmpTicker, "Randomly jitter(%v) election timeout", timeout)
+	rf.electionTimeout = timeout
+}
+
 func (rf *Raft) resetElectionTimeout() {
 	// Update the next timeout
 	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
@@ -340,7 +346,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.votedFor = -1
 
 	// Initialize timeouts
-	rf.electionTimeout = time.Duration(rand.Intn(300)+500) * time.Millisecond
+	rf.jitter()
 	rf.heartBeatInterval = time.Duration(110) * time.Millisecond
 	rf.nextElectionTimeout = time.Now().Add(rf.electionTimeout)
 
