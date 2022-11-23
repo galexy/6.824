@@ -18,6 +18,8 @@ package raft
 //
 
 import (
+	"6.824/labgob"
+	"bytes"
 	"math/rand"
 	"time"
 
@@ -39,6 +41,7 @@ const (
 	cmpClient    = "CLIENT"
 	cmpLogger    = "LOGGER"
 	cmpCommit    = "COMMIT"
+	cmpPersist   = "PERSST"
 )
 
 type ServerId int
@@ -47,6 +50,8 @@ type Term int
 
 type LogIndex uint
 
+// ServerStateMachine defines an interface for /State Pattern/ objects
+// that handle events in the distinct server states Follower, Candidate, and Leader.
 type ServerStateMachine interface {
 	isLeader() bool
 	processTick()
@@ -62,7 +67,7 @@ type ServerStateMachine interface {
 }
 
 //
-// A Go object implementing a single Raft peer.
+// A Raft object represents a single peer in a cluster
 //
 type Raft struct {
 	// R/O Thread-Safe data
@@ -71,21 +76,21 @@ type Raft struct {
 	electionTimeout   time.Duration
 	heartBeatInterval time.Duration
 
-	// Accessed atomically
-	dead int32 // set by Kill()
+	// Test specific
+	dead      int32         // set by Kill()
+	applyChn  chan ApplyMsg // Channel to apply log entries
+	persister *Persister    // Object to hold this peer's persisted state
 
 	// Shared data
 	mu                  sync.Mutex         // Lock to protect shared access to this peer's state
 	nextElectionTimeout time.Time          // Next election timeout
 	serverStateMachine  ServerStateMachine // Follower, Candidate, Leader State Logic
-	persister           *Persister         // Object to hold this peer's persisted state
-	currentTerm         Term               // Latest Term server has seen
-	votedFor            ServerId           // Candidate that received vote in current Term, -1 is null
 
+	currentTerm Term     // Latest Term server has seen
+	votedFor    ServerId // Candidate that received vote in current Term, -1 is null
 	log         Log
-	commitIndex LogIndex      // Index of high-est log entry known
-	lastApplied LogIndex      // Index of high-est log entry applied to state machine
-	applyChn    chan ApplyMsg // Channel to apply log entries
+	commitIndex LogIndex // Index of high-est log entry known
+	lastApplied LogIndex // Index of high-est log entry applied to state machine
 }
 
 // The ticker go routine starts a new election if this peer hasn't received
@@ -120,6 +125,8 @@ func (rf *Raft) checkTerm(serverId ServerId, term Term) ServerStateMachine {
 	DPrintf(rf.me, cmpTerm, "@T%d < S%d@T%d. Converting to follower.", rf.currentTerm, serverId, term)
 	rf.currentTerm = term
 	rf.votedFor = -1
+	rf.persist()
+
 	return &Follower{rf: rf}
 }
 
@@ -129,14 +136,14 @@ func (rf *Raft) checkTerm(serverId ServerId, term Term) ServerStateMachine {
 // see paper's Figure 2 for a description of what should be persistent.
 //
 func (rf *Raft) persist() {
-	// Your code here (2C).
-	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	DPrintf(rf.me, cmpPersist, "savingState(CT=%d, VF=%d)", rf.currentTerm, rf.votedFor)
+	rf.log.save(e)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
 //
@@ -146,19 +153,30 @@ func (rf *Raft) readPersist(data []byte) {
 	if data == nil || len(data) < 1 { // bootstrap without any state?
 		return
 	}
-	// Your code here (2C).
-	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var savedCurrentTerm Term
+
+	if err := d.Decode(&savedCurrentTerm); err != nil {
+		//panic(fmt.Sprintf("failed to read back server state, %v", err))
+		panic(err)
+	}
+
+	var savedVotedFor ServerId
+	if err := d.Decode(&savedVotedFor); err != nil {
+		//panic(fmt.Sprintf("failed to read back server state, %v", err))
+		panic(err)
+	}
+
+	rf.currentTerm = savedCurrentTerm
+	rf.votedFor = savedVotedFor
+	DPrintf(rf.me, cmpPersist, "loadingState(CT=%d, VF=%d)", rf.currentTerm, rf.votedFor)
+
+	if err := rf.log.load(d); err != nil {
+		//panic("failed to read back server state, %v")
+		panic(err)
+	}
 }
 
 func (rf *Raft) isLeader() bool {
@@ -210,8 +228,8 @@ func (rf *Raft) applyLog() {
 	defer rf.mu.Unlock()
 
 	if rf.commitIndex <= rf.lastApplied {
-		DPrintf(rf.me, cmpCommit, "applyLog should only be called when commitIndex has advanced")
-		panic("applyLog should only be called when commitIndex has advanced")
+		DPrintf(rf.me, cmpCommit, "applyLog appears to be called after logs have been applied")
+		return
 	}
 
 	for index := rf.lastApplied + 1; index <= rf.commitIndex; index++ {
@@ -226,16 +244,10 @@ func (rf *Raft) applyLog() {
 }
 
 //
-// as each Raft peer becomes aware that successive log entries are
-// committed, the peer should send an ApplyMsg to the service (or
-// tester) on the same server, via the applyCh passed to Make(). set
-// CommandValid to true to indicate that the ApplyMsg contains a newly
-// committed log entry.
-//
-// in part 2D you'll want to send other kinds of messages (e.g.,
-// snapshots) on the applyCh, but set CommandValid to false for these
-// other uses.
-//
+// ApplyMsg is the payload that each Raft peer uses to single to the server
+// as it becomes aware that successive log entries are committed via the applyCh
+// passed to Make(). CommandValid is true to indicate that the ApplyMsg contains
+//a newly committed log entry and false for other types of messages.
 type ApplyMsg struct {
 	CommandValid bool
 	Command      interface{}

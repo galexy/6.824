@@ -38,6 +38,8 @@ func (c *Candidate) startElection() {
 	c.votes[c.rf.me] = true
 	c.rf.votedFor = c.rf.me
 
+	c.rf.persist()
+
 	DPrintf(c.rf.me, cmpCandidate, "running a campaign(T=%d)", c.rf.currentTerm)
 	for peerId, peer := range c.rf.peers {
 		peerId := ServerId(peerId)
@@ -125,6 +127,6 @@ func (c *Candidate) processAppendEntriesResponse(
 	return c
 }
 
-func (c *Candidate) processCommand(command interface{}) (index LogIndex, term Term) {
+func (c *Candidate) processCommand(_ interface{}) (index LogIndex, term Term) {
 	panic("Candidate should not be processing commands!")
 }
