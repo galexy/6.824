@@ -203,6 +203,12 @@ func (rf *Raft) dispatchRequestVoteResponse(peer *Peer, args *RequestVoteArgs, r
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	if args.Term != rf.currentTerm {
+		DPrintf(rf.me, cmpRPC, "<=~= S%d Old Response to RequestVote(%v) -> (%v). CT=%d. Dropping.",
+			peer.serverId, args, reply, rf.currentTerm)
+		return
+	}
+
 	DPrintf(rf.me, cmpRPC, "<=~= S%d Response to RequestVote(%v) -> (%v)", peer.serverId, args, reply)
 	rf.serverStateMachine = rf.
 		checkTerm(peer.serverId, reply.Term).
@@ -222,6 +228,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 func (rf *Raft) dispatchAppendEntriesResponse(peer *Peer, args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
+
+	if args.Term != rf.currentTerm {
+		DPrintf(rf.me, cmpRPC, "<=~= S%d Old Response to AppendEntries(%v) -> (%v). CT=%d. Dropping.",
+			peer.serverId, args, reply, rf.currentTerm)
+		return
+	}
 
 	DPrintf(rf.me, cmpRPC, "<=~= S%d Response to AppendEntries(%v) -> (%v)", peer.serverId, args, reply)
 	rf.serverStateMachine = rf.
