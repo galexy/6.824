@@ -114,7 +114,7 @@ func (f *Follower) updateCommitIndex(args *AppendEntriesArgs) {
 			maxEntry = args.Entries[len(args.Entries)-1].Index
 		}
 
-		var newCommitIndex = max(maxEntry, args.LeaderCommit)
+		var newCommitIndex = min(maxEntry, args.LeaderCommit)
 
 		DPrintf(f.rf.me, cmpFollower, "leaderCommit %d > commitIndex %d. updating to %d",
 			args.LeaderCommit, f.rf.commitIndex, newCommitIndex)

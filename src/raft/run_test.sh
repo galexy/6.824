@@ -17,4 +17,4 @@
          TestFigure8Unreliable2C \
          TestReliableChurn2C \
          TestUnreliableChurn2C \
-         -s -n 10 -r -p 16
+         -s -n 40 -p 16
