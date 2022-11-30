@@ -147,17 +147,6 @@ func (l *LogImpl) save(encoder *labgob.LabEncoder) error {
 			continue
 		}
 
-		//if err := encoder.Encode(entry.Index); err != nil {
-		//	return fmt.Errorf("failed to encode index of log entry %d: %v", i, err)
-		//}
-		//
-		//if err := encoder.Encode(entry.Term); err != nil {
-		//	return fmt.Errorf("failed to encode term of log entry %d: %v", i, err)
-		//}
-		//
-		//if err := encoder.Encode(entry.Command); err != nil {
-		//	return fmt.Errorf("failed to encode command of log entry %d: %v", i, err)
-		//}
 		if err := encoder.Encode(entry); err != nil {
 			return fmt.Errorf("failed to encode log entry %d: %v", i, err)
 		}
@@ -175,22 +164,6 @@ func (l *LogImpl) load(decoder *labgob.LabDecoder) error {
 	}
 
 	for i := 0; i < savedNumEntries; i++ {
-		//var savedIndex LogIndex
-		//if err := decoder.Decode(&savedIndex); err != nil {
-		//	return fmt.Errorf("failed to decode index of log entry %d: %v", i+1, err)
-		//}
-		//
-		//var savedTerm Term
-		//if err := decoder.Decode(&savedTerm); err != nil {
-		//	return fmt.Errorf("failed to decode term of log entry %d: %v", i+1, err)
-		//}
-		//
-		//var savedCommand interface{}
-		//if err := decoder.Decode(&savedCommand); err != nil {
-		//	return fmt.Errorf("failed to decode command of log entry %d: %v", i+1, err)
-		//}
-
-		//entry := &LogEntry{Index: savedIndex, Term: savedTerm, Command: savedCommand}
 		savedEntry := LogEntry{}
 		if err := decoder.Decode(&savedEntry); err != nil {
 			return fmt.Errorf("failed to decode of log entry %d: %v", i, err)
