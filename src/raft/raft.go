@@ -91,6 +91,7 @@ type Raft struct {
 	log         Log
 	commitIndex LogIndex // Index of high-est log entry known
 	lastApplied LogIndex // Index of high-est log entry applied to state machine
+	committing  LogIndex // Index that is actively being commited
 }
 
 // The ticker go routine starts a new election if this peer hasn't received
@@ -250,15 +251,31 @@ func (rf *Raft) applyLog() {
 		return
 	}
 
-	for index := rf.lastApplied + 1; index <= rf.commitIndex; index++ {
-		DPrintf(rf.me, cmpCommit, "applying log index %d", index)
-
-		entry := rf.log.getEntryAt(index)
-		msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: int(entry.Index)}
-
-		rf.applyChn <- msg
-		rf.lastApplied = index
+	if rf.committing > 0 {
+		DPrintf(rf.me, cmpCommit, "Already actively commit %d")
+		return
 	}
+
+	index := rf.lastApplied + 1
+	DPrintf(rf.me, cmpCommit, "applying log index %d", index)
+	rf.committing = index
+	entry := rf.log.getEntryAt(index)
+	msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: int(entry.Index)}
+
+	go func(rf *Raft, msg ApplyMsg) {
+		// Don't lock here since applyChn can block. Lock after channel as received message
+		rf.applyChn <- msg
+
+		rf.mu.Lock()
+		defer rf.mu.Unlock()
+
+		rf.lastApplied = rf.committing
+		rf.committing = 0
+		if rf.lastApplied < rf.commitIndex {
+			DPrintf(rf.me, cmpCommit, "More logs to apply - calling self")
+			go rf.applyLog()
+		}
+	}(rf, msg)
 }
 
 //
