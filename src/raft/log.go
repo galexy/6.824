@@ -25,6 +25,7 @@ type Log interface {
 	lastLogEntry() (index LogIndex, term Term)
 	save(encoder *labgob.LabEncoder) error
 	load(encoder *labgob.LabDecoder) error
+	compactAt(index LogIndex)
 }
 
 type LogImpl struct {
@@ -191,4 +192,12 @@ func (l *LogImpl) load(decoder *labgob.LabDecoder) error {
 	DPrintf(l.rf.me, cmpPersist, "loaded %d log entries", savedNumEntries)
 
 	return nil
+}
+
+func (l *LogImpl) compactAt(newStartIndex LogIndex) {
+	DPrintf(l.rf.me, cmpLogger, "Compacting log at %d.", newStartIndex)
+
+	// Note: l.entries[0] is still the sentinel and will hold newStartIndex as last entry
+	l.entries = l.entries[newStartIndex-l.startIndex:]
+	l.startIndex = newStartIndex
 }
