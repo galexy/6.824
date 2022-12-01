@@ -17,4 +17,10 @@
          TestFigure8Unreliable2C \
          TestReliableChurn2C \
          TestUnreliableChurn2C \
-         -s -n 10 -p 16
+         TestSnapshotBasic2D \
+         TestSnapshotInstall2D \
+         TestSnapshotInstallUnreliable2D \
+         TestSnapshotInstallCrash2D \
+         TestSnapshotInstallUnCrash2D \
+         TestSnapshotAllCrash2D \
+         -s -n 30 -p 16
