@@ -19,5 +19,8 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	DPrintf(rf.me, cmpClient, "Requested Snapshot(index=%d)", index)
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
+
 	rf.log.compactAt(LogIndex(index))
+	rf.snapshot = snapshot
+	rf.persist()
 }

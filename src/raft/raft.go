@@ -48,7 +48,7 @@ type ServerId int
 
 type Term int
 
-type LogIndex uint
+type LogIndex int
 
 // ServerStateMachine defines an interface for /State Pattern/ objects
 // that handle events in the distinct server states Follower, Candidate, and Leader.
@@ -62,6 +62,9 @@ type ServerStateMachine interface {
 
 	processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
 	processAppendEntriesResponse(serverId ServerId, args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine
+
+	processIncomingInstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine
+	processInstallSnapshotResponse(serverId ServerId, args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine
 
 	processCommand(command interface{}) (index LogIndex, term Term)
 }
@@ -92,6 +95,7 @@ type Raft struct {
 	commitIndex LogIndex // Index of high-est log entry known
 	lastApplied LogIndex // Index of high-est log entry applied to state machine
 	committing  LogIndex // Index that is actively being commited
+	snapshot    []byte   // latest snapshot if any
 }
 
 // The ticker go routine starts a new election if this peer hasn't received
@@ -147,10 +151,12 @@ func (rf *Raft) persist() {
 	e := labgob.NewEncoder(w)
 	e.Encode(rf.currentTerm)
 	e.Encode(rf.votedFor)
-	DPrintf(rf.me, cmpPersist, "savingState(CT=%d, VF=%d)", rf.currentTerm, rf.votedFor)
 	rf.log.save(e)
 	data := w.Bytes()
-	rf.persister.SaveRaftState(data)
+
+	DPrintf(rf.me, cmpPersist, "SaveStateAndSnapshot(CT=%d, VF=%d, D=len(%d), S=len(%d))",
+		rf.currentTerm, rf.votedFor, len(data), len(rf.snapshot))
+	rf.persister.SaveStateAndSnapshot(data, rf.snapshot)
 }
 
 //
@@ -181,9 +187,9 @@ func (rf *Raft) readPersist(data []byte) {
 	DPrintf(rf.me, cmpPersist, "loadingState(CT=%d, VF=%d)", rf.currentTerm, rf.votedFor)
 
 	if err := rf.log.load(d); err != nil {
-		//panic("failed to read back server state, %v")
 		panic(err)
 	}
+	rf.lastApplied = rf.log.getStartingIndex()
 }
 
 func (rf *Raft) isLeader() bool {
@@ -240,6 +246,32 @@ func (rf *Raft) dispatchAppendEntriesResponse(peer *Peer, args *AppendEntriesArg
 	rf.serverStateMachine = rf.
 		checkTerm(peer.serverId, reply.Term).
 		processAppendEntriesResponse(peer.serverId, args, reply)
+}
+
+func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	DPrintf(rf.me, cmpRPC, "<=-= S%d Receive InstallSnapshot(%v)", args.LeaderId, args)
+	rf.serverStateMachine = rf.
+		checkTerm(args.LeaderId, args.Term).
+		processIncomingInstallSnapshot(args, reply)
+}
+
+func (rf *Raft) dispatchInstallSnapshotResponse(peer *Peer, args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	if args.Term != rf.currentTerm {
+		DPrintf(rf.me, cmpRPC, "<=~= S%d Old Response to InstallSnapshot(%v) -> (%v). CT=%d. Dropping.",
+			peer.serverId, args, reply, rf.currentTerm)
+		return
+	}
+
+	DPrintf(rf.me, cmpRPC, "<=~= S%d Response to InstallSnapshot(%v) -> (%v)", peer.serverId, args, reply)
+	rf.serverStateMachine = rf.
+		checkTerm(peer.serverId, reply.Term).
+		processInstallSnapshotResponse(peer.serverId, args, reply)
 }
 
 func (rf *Raft) applyLog() {
@@ -390,6 +422,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
+	rf.snapshot = persister.ReadSnapshot()
 
 	// start ticker goroutine to start elections
 	go rf.ticker()

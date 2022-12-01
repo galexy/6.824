@@ -19,28 +19,34 @@ type Log interface {
 	append(term Term, command interface{}) (newEntry, prevEntry *LogEntry)
 	hasEntryAt(index LogIndex, term Term) (hasPrevEntry bool, conflictTerm Term, conflictTermStartIndex LogIndex)
 	getEntryAt(index LogIndex) (entry *LogEntry)
-	getEntriesFrom(index LogIndex) (prevEntry *LogEntry, entries []*LogEntry)
+	getEntriesFrom(index LogIndex) (droppedEntry bool, prevEntry *LogEntry, entries []*LogEntry)
 	nextIndex() LogIndex
 	insertReplicatedEntries(entries []*LogEntry)
 	lastLogEntry() (index LogIndex, term Term)
 	save(encoder *labgob.LabEncoder) error
 	load(encoder *labgob.LabDecoder) error
 	compactAt(index LogIndex)
+	discard(newStartIndex LogIndex, newStartTerm Term)
+	getStartingIndex() LogIndex
 }
 
 type LogImpl struct {
-	startIndex LogIndex    // What is the latest index in the snapshot. This index represents 0 in slide
-	entries    []*LogEntry // Slice holding active log entries, 1-based indexing with 0 holds sentinel
-	rf         *Raft       // Link to main raft
+	sentinelIndex LogIndex    // What is the latest index in the snapshot. This index represents 0 in slide
+	entries       []*LogEntry // Slice holding active log entries, 1-based indexing with 0 holds sentinel
+	rf            *Raft       // Link to main raft
 }
 
 func MakeLog(rf *Raft) Log {
 	log := &LogImpl{rf: rf}
-	log.startIndex = LogIndex(0)
+	log.sentinelIndex = LogIndex(0)
 	log.entries = make([]*LogEntry, 1, 1024)
 	log.entries[0] = &LogEntry{Index: 0, Term: 0, Command: nil}
 
 	return log
+}
+
+func (l *LogImpl) getStartingIndex() LogIndex {
+	return l.sentinelIndex
 }
 
 func (l *LogImpl) append(term Term, command interface{}) (newEntry, prevEntry *LogEntry) {
@@ -58,8 +64,9 @@ func (l *LogImpl) append(term Term, command interface{}) (newEntry, prevEntry *L
 }
 
 func (l *LogImpl) hasEntryAt(index LogIndex, term Term) (hasEntry bool, conflictTerm Term, conflictTermStartIndex LogIndex) {
-	if l.startIndex+LogIndex(len(l.entries)) <= index {
-		panic("Not expected")
+	if l.sentinelIndex+LogIndex(len(l.entries)) <= index {
+		hasEntry = false
+		return
 	}
 
 	entryAtIndex := l.getEntryAt(index)
@@ -77,23 +84,24 @@ func (l *LogImpl) hasEntryAt(index LogIndex, term Term) (hasEntry bool, conflict
 func (l *LogImpl) findTermStart(entry *LogEntry) (startIndex LogIndex) {
 	// TODO: build an map to find these index positions in O(1) time
 	startIndex = entry.Index
-	for ; startIndex > 0 && l.getEntryAt(startIndex).Term == entry.Term; startIndex-- {
+	for ; startIndex > l.sentinelIndex && l.getEntryAt(startIndex).Term == entry.Term; startIndex-- {
 	}
 	startIndex = startIndex + 1
 	return startIndex
 }
 
 func (l *LogImpl) getEntryAt(index LogIndex) (entry *LogEntry) {
-	effectiveIndex := index - l.startIndex
+	effectiveIndex := index - l.sentinelIndex
 	return l.entries[effectiveIndex]
 }
 
-func (l *LogImpl) getEntriesFrom(index LogIndex) (prevEntry *LogEntry, entries []*LogEntry) {
-	effectiveIndex := index - l.startIndex
-	prevIndex := effectiveIndex - 1
-	if prevIndex >= 0 {
-		prevEntry = l.entries[prevIndex]
+func (l *LogImpl) getEntriesFrom(index LogIndex) (droppedEntry bool, prevEntry *LogEntry, entries []*LogEntry) {
+	effectiveIndex := index - l.sentinelIndex
+	if effectiveIndex < 1 {
+		return true, l.entries[0], nil
 	}
+
+	prevEntry = l.entries[effectiveIndex-1]
 
 	if int(effectiveIndex) < len(l.entries) {
 		entries = l.entries[int(effectiveIndex):]
@@ -103,12 +111,12 @@ func (l *LogImpl) getEntriesFrom(index LogIndex) (prevEntry *LogEntry, entries [
 }
 
 func (l *LogImpl) truncateLogAt(index LogIndex) {
-	effectiveIndex := index - l.startIndex
+	effectiveIndex := index - l.sentinelIndex
 	l.entries = l.entries[:effectiveIndex]
 }
 
 func (l *LogImpl) nextIndex() LogIndex {
-	return l.startIndex + LogIndex(len(l.entries))
+	return l.sentinelIndex + LogIndex(len(l.entries))
 }
 
 func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
@@ -145,7 +153,7 @@ func (l *LogImpl) lastLogEntry() (index LogIndex, term Term) {
 }
 
 func (l *LogImpl) save(encoder *labgob.LabEncoder) error {
-	if err := encoder.Encode(int(l.startIndex)); err != nil {
+	if err := encoder.Encode(int(l.sentinelIndex)); err != nil {
 		return fmt.Errorf("failed to encode log start index %v", err)
 	}
 
@@ -174,7 +182,7 @@ func (l *LogImpl) load(decoder *labgob.LabDecoder) error {
 	if err := decoder.Decode(&savedStartIndex); err != nil {
 		return fmt.Errorf("failed to decode log start index %v", err)
 	}
-	l.startIndex = LogIndex(savedStartIndex)
+	l.sentinelIndex = LogIndex(savedStartIndex)
 
 	var savedNumEntries int
 	if err := decoder.Decode(&savedNumEntries); err != nil {
@@ -198,6 +206,14 @@ func (l *LogImpl) compactAt(newStartIndex LogIndex) {
 	DPrintf(l.rf.me, cmpLogger, "Compacting log at %d.", newStartIndex)
 
 	// Note: l.entries[0] is still the sentinel and will hold newStartIndex as last entry
-	l.entries = l.entries[newStartIndex-l.startIndex:]
-	l.startIndex = newStartIndex
+	l.entries = l.entries[newStartIndex-l.sentinelIndex:]
+	l.sentinelIndex = newStartIndex
+}
+
+func (l *LogImpl) discard(newSentinelIndex LogIndex, newSentinelTerm Term) {
+	DPrintf(l.rf.me, cmpLogger, "Discarding log. discard(I=%d, T=%d)", newSentinelIndex, newSentinelTerm)
+
+	l.sentinelIndex = newSentinelIndex
+	l.entries = make([]*LogEntry, 1, 1024)
+	l.entries[0] = &LogEntry{Index: newSentinelIndex, Term: newSentinelTerm, Command: nil}
 }
