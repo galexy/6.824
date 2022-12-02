@@ -157,16 +157,12 @@ func (l *LogImpl) save(encoder *labgob.LabEncoder) error {
 		return fmt.Errorf("failed to encode log start index %v", err)
 	}
 
-	numEntries := len(l.entries) - 1
+	numEntries := len(l.entries)
 	if err := encoder.Encode(numEntries); err != nil {
 		return fmt.Errorf("failed to encode num of log entries %v", err)
 	}
 
 	for i, entry := range l.entries {
-		if i == 0 {
-			continue
-		}
-
 		if err := encoder.Encode(entry); err != nil {
 			return fmt.Errorf("failed to encode log entry %d: %v", i, err)
 		}
@@ -189,15 +185,23 @@ func (l *LogImpl) load(decoder *labgob.LabDecoder) error {
 		return fmt.Errorf("failed to decode number of log entries %v", err)
 	}
 
-	for i := 0; i < savedNumEntries; i++ {
+	// overwrite sentinel entry
+	savedEntry := LogEntry{}
+	if err := decoder.Decode(&savedEntry); err != nil {
+		return fmt.Errorf("failed to decode sentinel log entry: %v", err)
+	}
+	l.entries[0] = &savedEntry
+
+	for i := 1; i < savedNumEntries; i++ {
 		savedEntry := LogEntry{}
 		if err := decoder.Decode(&savedEntry); err != nil {
 			return fmt.Errorf("failed to decode of log entry %d: %v", i, err)
 		}
+		//DPrintf(l.rf.me, cmpPersist, "loaded LogEntry(%v)", &savedEntry)
 		l.entries = append(l.entries, &savedEntry)
 	}
 
-	DPrintf(l.rf.me, cmpPersist, "loaded %d log entries", savedNumEntries)
+	DPrintf(l.rf.me, cmpPersist, "loaded %d log entries starting at %d", savedNumEntries, l.sentinelIndex)
 
 	return nil
 }
