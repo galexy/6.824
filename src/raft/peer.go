@@ -44,3 +44,24 @@ func (p *Peer) callAppendEntries(leaderId ServerId, term Term, prevLogIndex LogI
 
 	p.raft.dispatchAppendEntriesResponse(p, args, reply)
 }
+
+func (p *Peer) callInstallSnapshot(leaderId ServerId, term Term,
+	lastIncludedIndex LogIndex, latIncludedTerm Term, data []byte) {
+
+	args := &InstallSnapshotArgs{
+		LeaderId:          leaderId,
+		Term:              term,
+		LastIncludedIndex: lastIncludedIndex,
+		LastIncludedTerm:  latIncludedTerm,
+		Data:              data,
+	}
+	reply := &InstallSnapshotReply{}
+
+	DPrintf(p.raft.me, cmpRPC, "=-=> S%d Send InstallSnapshot(%v)", p.serverId, args)
+	if !p.endPoint.Call("Raft.InstallSnapshot", args, reply) {
+		DPrintf(p.raft.me, cmpRPC, "=/=> S%d Failed InstallSnapshot()", p.serverId)
+		return
+	}
+
+	p.raft.dispatchInstallSnapshotResponse(p, args, reply)
+}

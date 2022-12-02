@@ -16,6 +16,11 @@ func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int,
 // service no longer needs the log through (and including)
 // that Index. Raft should now trim its log as much as possible.
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
-	// Your code here (2D).
+	DPrintf(rf.me, cmpClient, "Requested Snapshot(index=%d)", index)
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
+	rf.log.compactAt(LogIndex(index))
+	rf.snapshot = snapshot
+	rf.persist()
 }

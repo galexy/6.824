@@ -41,6 +41,27 @@ func (r *AppendEntriesReply) String() string {
 	return fmt.Sprintf("T=%d, S=%v", r.Term, r.Success)
 }
 
+type InstallSnapshotArgs struct {
+	Term              Term
+	LeaderId          ServerId
+	LastIncludedIndex LogIndex
+	LastIncludedTerm  Term
+	Data              []byte
+}
+
+func (a *InstallSnapshotArgs) String() string {
+	return fmt.Sprintf("T=%d, L=%d, LI=%d, LT=%d, D=len(%d)",
+		a.Term, a.LeaderId, a.LastIncludedIndex, a.LastIncludedTerm, len(a.Data))
+}
+
+type InstallSnapshotReply struct {
+	Term Term
+}
+
+func (r *InstallSnapshotReply) String() string {
+	return fmt.Sprintf("T=%d", r.Term)
+}
+
 type Leader struct {
 	rf            *Raft       // Reference to main raft
 	nextIndex     []LogIndex  // for each peer, Index of the next log entry to send that server
@@ -85,19 +106,30 @@ func (l *Leader) processTick() {
 		}
 
 		if now.After(beat) || now.Equal(beat) {
-			prevEntry, entries := l.rf.log.getEntriesFrom(l.nextIndex[peerId])
+			dropped, prevEntry, entries := l.rf.log.getEntriesFrom(l.nextIndex[peerId])
+
+			if dropped {
+				// send snapshot to follower
+				go l.rf.peers[peerId].callInstallSnapshot(
+					l.rf.me,
+					l.rf.currentTerm,
+					prevEntry.Index,
+					prevEntry.Term,
+					l.rf.snapshot)
+			} else {
+				// send AppendEntries
+				go l.rf.peers[peerId].callAppendEntries(
+					l.rf.me,
+					l.rf.currentTerm,
+					prevEntry.Index,
+					prevEntry.Term,
+					entries,
+					l.rf.commitIndex)
+			}
 
 			// reset heartbeat timeout for peer
 			l.nextHeartbeat[peerId] = now.Add(l.rf.heartBeatInterval)
 
-			// send AppendEntries
-			go l.rf.peers[peerId].callAppendEntries(
-				l.rf.me,
-				l.rf.currentTerm,
-				prevEntry.Index,
-				prevEntry.Term,
-				entries,
-				l.rf.commitIndex)
 		}
 	}
 }
@@ -161,6 +193,35 @@ func (l *Leader) processAppendEntriesResponse(
 
 	// if success, update nextIndex and maxIndex for follower (section 5.3)
 	l.updateIndexes(serverId, args)
+
+	return l
+}
+
+func (l *Leader) processIncomingInstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
+	if l.rf.currentTerm > args.Term {
+		DPrintf(l.rf.me, cmpLeader, "Received stale InstallSnapshot(S=%d, T=%d). Ignoring.", args.LeaderId, args.Term)
+		reply.Term = l.rf.currentTerm
+		return l
+	}
+
+	panic("Unexpected incoming InstallSnapshot()")
+}
+
+func (l *Leader) processInstallSnapshotResponse(serverId ServerId, args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
+	if l.rf.currentTerm != reply.Term {
+		DPrintf(l.rf.me, cmpLeader, "stale response InstallSnapshot(T=%d) -> T=%d. Ignoring.", args.Term, reply.Term)
+		return l
+	}
+
+	currentNextIndex := l.nextIndex[serverId]
+	currentMaxIndex := l.maxIndex[serverId]
+	newNextIndex := args.LastIncludedIndex + 1
+	newMaxIndex := args.LastIncludedIndex
+
+	DPrintf(l.rf.me, cmpLeader, "Snapshot successfully sent to S=%d. Updating nextIndex(from=%d, to=%d) and matchIndex(from=%d, to=%d)",
+		serverId, currentNextIndex, newNextIndex, currentMaxIndex, newMaxIndex)
+	l.nextIndex[serverId] = newNextIndex
+	l.maxIndex[serverId] = newMaxIndex
 
 	return l
 }

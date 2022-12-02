@@ -110,6 +110,59 @@ func (f *Follower) processIncomingAppendEntries(args *AppendEntriesArgs, reply *
 	return f
 }
 
+func (f *Follower) processIncomingInstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
+	reply.Term = f.rf.currentTerm
+
+	if f.rf.currentTerm > args.Term {
+		DPrintf(f.rf.me, cmpFollower, "AppendEntries from S%d@T%d < S%d@T%d. Not processing.",
+			args.Term, f.rf.currentTerm)
+		return f
+	}
+
+	hasPrevEntry, _, _ := f.rf.log.hasEntryAt(args.LastIncludedIndex, args.LastIncludedTerm)
+
+	if hasPrevEntry {
+		DPrintf(f.rf.me, cmpFollower, "Found LogEntry(I=%d, T=%d).",
+			args.LastIncludedIndex, args.LastIncludedTerm)
+		compactToIndex := args.LastIncludedIndex
+		if f.rf.lastApplied < compactToIndex {
+			DPrintf(f.rf.me, cmpFollower, "LastApplied(%d) < LastIncludedIndex(%d).",
+				f.rf.lastApplied, args.LastIncludedIndex)
+			compactToIndex = f.rf.lastApplied + 1
+		}
+
+		DPrintf(f.rf.me, cmpFollower, "Compacting log to %d", compactToIndex)
+		f.rf.log.compactAt(compactToIndex)
+		f.rf.persist()
+		return f
+	}
+
+	DPrintf(f.rf.me, cmpFollower, "Not Found LogEntry(I=%d, T=%d). Discarding Log. Updating lastApplied=%d",
+		args.LastIncludedIndex, args.LastIncludedTerm, args.LastIncludedIndex)
+
+	// Update lastApplied, but leave commitIndex alone. It will be updated on next heartbeat
+	f.rf.lastApplied = args.LastIncludedIndex
+	f.rf.log.discard(args.LastIncludedIndex, args.LastIncludedTerm)
+	f.rf.snapshot = args.Data
+	f.rf.persist()
+
+	msg := &ApplyMsg{
+		SnapshotValid: true,
+		Snapshot:      args.Data,
+		SnapshotIndex: int(args.LastIncludedIndex),
+		SnapshotTerm:  int(args.LastIncludedTerm),
+	}
+
+	f.rf.applyChn <- *msg
+
+	return f
+}
+
+func (f *Follower) processInstallSnapshotResponse(serverId ServerId, args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
+	DPrintf(f.rf.me, cmpFollower, "<~~~ S%d Stale Response to InstallSnapshot(%v). Ignoring", serverId, args)
+	return f
+}
+
 func (f *Follower) updateCommitIndex(args *AppendEntriesArgs) {
 	var maxEntry LogIndex = 0
 	if len(args.Entries) == 0 {

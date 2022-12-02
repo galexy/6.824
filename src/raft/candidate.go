@@ -132,7 +132,20 @@ func (c *Candidate) processAppendEntriesResponse(
 	_ *AppendEntriesArgs,
 	_ *AppendEntriesReply) ServerStateMachine {
 
-	DPrintf(c.rf.me, cmpCandidate, "Received Stale AppendEntries Response. Ignoring.")
+	DPrintf(c.rf.me, cmpCandidate, "Received Stale AppendEntries() Response. Ignoring.")
+	return c
+}
+
+func (c *Candidate) processIncomingInstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
+	DPrintf(c.rf.me, cmpCandidate, "Received InstallSnapshot() Request. Not processing.")
+	reply.Term = c.rf.currentTerm
+
+	return c
+}
+
+func (c *Candidate) processInstallSnapshotResponse(serverId ServerId, args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
+	DPrintf(c.rf.me, cmpCandidate, "Received Stale InstallSnapshot() Response. Not processing.")
+
 	return c
 }
 
