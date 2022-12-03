@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"6.824/logger"
 	"fmt"
 	"time"
 )
@@ -67,6 +68,11 @@ type Leader struct {
 	nextIndex     []LogIndex  // for each peer, Index of the next log entry to send that server
 	maxIndex      []LogIndex  // for each server Index of the highest known replicated log entry
 	nextHeartbeat []time.Time // For each peer, when will next heartbeat expire
+}
+
+func (l *Leader) Debug(format string, a ...interface{}) {
+	prefix := fmt.Sprintf("[S%d][%v] S%d ", l.rf.me, cmpLeader, l.rf.me)
+	logger.DPrintf(prefix+format, a...)
 }
 
 func MakeLeader(rf *Raft) *Leader {
@@ -139,7 +145,7 @@ func (l *Leader) processElectionTimeout() ServerStateMachine {
 }
 
 func (l *Leader) processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
-	DPrintf(l.rf.me, cmpLeader, "Denying RequestVote(C=%d,T=%d). Already Leader",
+	l.Debug("Denying RequestVote(C=%d,T=%d). Already Leader",
 		args.CandidateId, args.Term)
 
 	reply.Term = l.rf.currentTerm
@@ -149,7 +155,7 @@ func (l *Leader) processIncomingRequestVote(args *RequestVoteArgs, reply *Reques
 }
 
 func (l *Leader) processRequestVoteResponse(serverId ServerId, args *RequestVoteArgs, _ *RequestVoteReply) ServerStateMachine {
-	DPrintf(l.rf.me, cmpLeader, "Ignoring RequestVote Response from S%d@T%d. Already Leader",
+	l.Debug("Ignoring RequestVote Response from S%d@T%d. Already Leader",
 		serverId, args.Term)
 
 	return l
@@ -162,7 +168,7 @@ func (l *Leader) processIncomingAppendEntries(args *AppendEntriesArgs, reply *Ap
 		panic("Leader unexpectedly received AppendEntries for current or newer Term.")
 	}
 
-	DPrintf(l.rf.me, cmpLeader, "S%d ~~> S%d AppendEntriesReply(T=%d,S=false)",
+	l.Debug("S%d ~~> S%d AppendEntriesReply(T=%d,S=false)",
 		l.rf.me, args.LeaderId, l.rf.currentTerm)
 	reply.Term = l.rf.currentTerm
 	reply.Success = false
@@ -181,10 +187,10 @@ func (l *Leader) processAppendEntriesResponse(
 	if !reply.Success && reply.Term == l.rf.currentTerm {
 		if reply.RewindIndex == 0 {
 			nextIndex := l.nextIndex[serverId]
-			DPrintf(l.rf.me, cmpLeader, "decrementing nextIndex(S=%d) to %d", serverId, nextIndex-1)
+			l.Debug("decrementing nextIndex(S=%d) to %d", serverId, nextIndex-1)
 			l.nextIndex[serverId] = nextIndex - 1
 		} else {
-			DPrintf(l.rf.me, cmpLeader, "jumping nextIndex(S=%d) back to %d", serverId, reply.RewindIndex)
+			l.Debug("jumping nextIndex(S=%d) back to %d", serverId, reply.RewindIndex)
 			l.nextIndex[serverId] = reply.RewindIndex
 		}
 
@@ -199,7 +205,7 @@ func (l *Leader) processAppendEntriesResponse(
 
 func (l *Leader) processIncomingInstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
 	if l.rf.currentTerm > args.Term {
-		DPrintf(l.rf.me, cmpLeader, "Received stale InstallSnapshot(S=%d, T=%d). Ignoring.", args.LeaderId, args.Term)
+		l.Debug("Received stale InstallSnapshot(S=%d, T=%d). Ignoring.", args.LeaderId, args.Term)
 		reply.Term = l.rf.currentTerm
 		return l
 	}
@@ -209,7 +215,7 @@ func (l *Leader) processIncomingInstallSnapshot(args *InstallSnapshotArgs, reply
 
 func (l *Leader) processInstallSnapshotResponse(serverId ServerId, args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
 	if l.rf.currentTerm != reply.Term {
-		DPrintf(l.rf.me, cmpLeader, "stale response InstallSnapshot(T=%d) -> T=%d. Ignoring.", args.Term, reply.Term)
+		l.Debug("stale response InstallSnapshot(T=%d) -> T=%d. Ignoring.", args.Term, reply.Term)
 		return l
 	}
 
@@ -218,7 +224,7 @@ func (l *Leader) processInstallSnapshotResponse(serverId ServerId, args *Install
 	newNextIndex := args.LastIncludedIndex + 1
 	newMaxIndex := args.LastIncludedIndex
 
-	DPrintf(l.rf.me, cmpLeader, "Snapshot successfully sent to S=%d. Updating nextIndex(from=%d, to=%d) and matchIndex(from=%d, to=%d)",
+	l.Debug("Snapshot successfully sent to S=%d. Updating nextIndex(from=%d, to=%d) and matchIndex(from=%d, to=%d)",
 		serverId, currentNextIndex, newNextIndex, currentMaxIndex, newMaxIndex)
 	l.nextIndex[serverId] = newNextIndex
 	l.maxIndex[serverId] = newMaxIndex
@@ -242,19 +248,19 @@ func (l *Leader) updateIndexes(serverId ServerId, args *AppendEntriesArgs) {
 	}
 
 	if currentNextIndex >= newNextIndex {
-		DPrintf(l.rf.me, cmpLeader, "nextIndex(S=%d) %d >= %d, not updating",
+		l.Debug("nextIndex(S=%d) %d >= %d, not updating",
 			serverId, currentNextIndex, newNextIndex)
 	} else {
-		DPrintf(l.rf.me, cmpLeader, "update nextIndex(S=%d) to %d.", serverId, newNextIndex)
+		l.Debug("update nextIndex(S=%d) to %d.", serverId, newNextIndex)
 		l.nextIndex[serverId] = newNextIndex
 	}
 
 	maxUpdated := false
 	if currentMaxIndex >= newMaxIndex {
-		DPrintf(l.rf.me, cmpLeader, "maxIndex(S=%d) %d >= %d, not updating",
+		l.Debug("maxIndex(S=%d) %d >= %d, not updating",
 			serverId, currentMaxIndex, newMaxIndex)
 	} else {
-		DPrintf(l.rf.me, cmpLeader, "update maxIndex(S=%d) to %d.", serverId, newMaxIndex)
+		l.Debug("update maxIndex(S=%d) to %d.", serverId, newMaxIndex)
 		l.maxIndex[serverId] = newMaxIndex
 		maxUpdated = true
 	}
@@ -272,7 +278,7 @@ func (l *Leader) updateIndexes(serverId ServerId, args *AppendEntriesArgs) {
 }
 
 func (l *Leader) updateCommitIndex() (updated bool) {
-	DPrintf(l.rf.me, cmpLeader, "checking if commitIndex needs to be updated")
+	l.Debug("checking if commitIndex needs to be updated")
 	start := l.rf.commitIndex
 	end := l.rf.log.nextIndex()
 
@@ -290,7 +296,7 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 	accum := 1
 	for index := end - 1; index >= start; index-- {
 		accum += indexCounts[index-l.rf.commitIndex]
-		DPrintf(l.rf.me, cmpLeader, "%d nodes have commitIndex=>%d", accum, index)
+		l.Debug("%d nodes have commitIndex=>%d", accum, index)
 		if accum >= majority {
 			maxCommitEntry := l.rf.log.getEntryAt(index)
 			if maxCommitEntry == nil {
@@ -299,12 +305,12 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 
 			commitTerm := maxCommitEntry.Term
 			if commitTerm != l.rf.currentTerm {
-				DPrintf(l.rf.me, cmpLeader, "max majority commit index not current term (%d@T%d)", index, commitTerm)
+				l.Debug("max majority commit index not current term (%d@T%d)", index, commitTerm)
 				return false
 			}
 
 			if l.rf.commitIndex < index {
-				DPrintf(l.rf.me, cmpLeader, "updating commitIndex=%d.", index)
+				l.Debug("updating commitIndex=%d.", index)
 				l.rf.commitIndex = index
 				return true
 			}
@@ -318,7 +324,7 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 
 func (l *Leader) processCommand(command interface{}) (index LogIndex, term Term) {
 	newEntry, _ := l.rf.log.append(l.rf.currentTerm, command)
-	DPrintf(l.rf.me, cmpLeader, "enqueue(Command=%v,I=%d,T%d)",
+	l.Debug("enqueue(Command=%v,I=%d,T%d)",
 		command, newEntry.Index, newEntry.Term)
 	return newEntry.Index, newEntry.Term
 }

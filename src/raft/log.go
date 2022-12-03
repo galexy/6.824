@@ -2,6 +2,7 @@ package raft
 
 import (
 	"6.824/labgob"
+	"6.824/logger"
 	"fmt"
 )
 
@@ -43,6 +44,11 @@ func MakeLog(rf *Raft) Log {
 	log.entries[0] = &LogEntry{Index: 0, Term: 0, Command: nil}
 
 	return log
+}
+
+func (l *LogImpl) Debug(format string, a ...interface{}) {
+	prefix := fmt.Sprintf("[S%d][%v] S%d ", l.rf.me, cmpLogger, l.rf.me)
+	logger.DPrintf(prefix+format, a...)
 }
 
 func (l *LogImpl) getStartingIndex() LogIndex {
@@ -123,7 +129,7 @@ func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
 	for _, entry := range entries {
 		nextIndex := l.nextIndex()
 		if entry.Index > nextIndex {
-			DPrintf(l.rf.me, cmpLogger, "Unexpected replicated entry @%d, expecting %d.", entry.Index, nextIndex)
+			l.Debug("Unexpected replicated entry @%d, expecting %d.", entry.Index, nextIndex)
 			panic(fmt.Sprintf("Unexpected replicated entry @%d, expecting %d.", entry.Index, nextIndex))
 		}
 
@@ -131,16 +137,16 @@ func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
 		if entry.Index < nextIndex {
 			existingEntry := l.getEntryAt(entry.Index)
 			if existingEntry.Term == entry.Term {
-				DPrintf(l.rf.me, cmpLogger, "Already have %d@T%d, skipping.", entry.Index, entry.Term)
+				l.Debug("Already have %d@T%d, skipping.", entry.Index, entry.Term)
 			}
 
-			DPrintf(l.rf.me, cmpLogger, "Conflict detected %d@T%d != replicated entry %d@T%d. Truncating log.",
+			l.Debug("Conflict detected %d@T%d != replicated entry %d@T%d. Truncating log.",
 				existingEntry.Index, existingEntry.Term, entry.Index, entry.Term)
 
 			l.truncateLogAt(entry.Index)
 		}
 
-		DPrintf(l.rf.me, cmpLogger, "Appending replicated entry %d@T%d", entry.Index, entry.Term)
+		l.Debug("Appending replicated entry %d@T%d", entry.Index, entry.Term)
 		l.entries = append(l.entries, entry)
 	}
 
@@ -168,7 +174,7 @@ func (l *LogImpl) save(encoder *labgob.LabEncoder) error {
 		}
 	}
 
-	DPrintf(l.rf.me, cmpPersist, "saved %d log entries", numEntries)
+	l.Debug("saved %d log entries", numEntries)
 
 	return nil
 }
@@ -197,17 +203,17 @@ func (l *LogImpl) load(decoder *labgob.LabDecoder) error {
 		if err := decoder.Decode(&savedEntry); err != nil {
 			return fmt.Errorf("failed to decode of log entry %d: %v", i, err)
 		}
-		//DPrintf(l.rf.me, cmpPersist, "loaded LogEntry(%v)", &savedEntry)
+		//logger.DPrintf(l.rf.me, cmpPersist, "loaded LogEntry(%v)", &savedEntry)
 		l.entries = append(l.entries, &savedEntry)
 	}
 
-	DPrintf(l.rf.me, cmpPersist, "loaded %d log entries starting at %d", savedNumEntries, l.sentinelIndex)
+	l.Debug("loaded %d log entries starting at %d", savedNumEntries, l.sentinelIndex)
 
 	return nil
 }
 
 func (l *LogImpl) compactAt(newStartIndex LogIndex) {
-	DPrintf(l.rf.me, cmpLogger, "Compacting log at %d.", newStartIndex)
+	l.Debug("Compacting log at %d.", newStartIndex)
 
 	// Note: l.entries[0] is still the sentinel and will hold newStartIndex as last entry
 	l.entries = l.entries[newStartIndex-l.sentinelIndex:]
@@ -215,7 +221,7 @@ func (l *LogImpl) compactAt(newStartIndex LogIndex) {
 }
 
 func (l *LogImpl) discard(newSentinelIndex LogIndex, newSentinelTerm Term) {
-	DPrintf(l.rf.me, cmpLogger, "Discarding log. discard(I=%d, T=%d)", newSentinelIndex, newSentinelTerm)
+	l.Debug("Discarding log. discard(I=%d, T=%d)", newSentinelIndex, newSentinelTerm)
 
 	l.sentinelIndex = newSentinelIndex
 	l.entries = make([]*LogEntry, 1, 1024)

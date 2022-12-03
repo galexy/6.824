@@ -20,6 +20,7 @@ package raft
 import (
 	"6.824/labgob"
 	"bytes"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -29,19 +30,15 @@ import (
 
 	//	"6.824/labgob"
 	"6.824/labrpc"
+	"6.824/logger"
 )
 
 const (
-	cmpTicker    = "TICKER"
 	cmpFollower  = "FOLLOW"
 	cmpCandidate = "CANDID"
-	cmpTerm      = "_TERM_"
-	cmpRPC       = "SRVRPC"
+	cmpRaft      = "_RAFT_"
 	cmpLeader    = "LEADER"
-	cmpClient    = "CLIENT"
 	cmpLogger    = "LOGGER"
-	cmpCommit    = "COMMIT"
-	cmpPersist   = "PERSST"
 )
 
 type ServerId int
@@ -98,6 +95,11 @@ type Raft struct {
 	snapshot    []byte   // latest snapshot if any
 }
 
+func (rf *Raft) Debug(format string, a ...interface{}) {
+	prefix := fmt.Sprintf("[S%d][%v] S%d ", rf.me, cmpRaft, rf.me)
+	logger.DPrintf(prefix+format, a...)
+}
+
 // The ticker go routine starts a new election if this peer hasn't received
 // heartbeats recently.
 func (rf *Raft) ticker() {
@@ -109,7 +111,7 @@ func (rf *Raft) ticker() {
 		if rf.isLeader() {
 			rf.serverStateMachine.processTick()
 		} else if now.After(rf.nextElectionTimeout) {
-			DPrintf(rf.me, cmpTicker, "Election Timeout (%v) elapsed", rf.electionTimeout)
+			rf.Debug("Election Timeout (%v) elapsed", rf.electionTimeout)
 
 			rf.serverStateMachine = rf.serverStateMachine.processElectionTimeout()
 		}
@@ -119,7 +121,7 @@ func (rf *Raft) ticker() {
 
 func (rf *Raft) jitter() {
 	timeout := time.Duration(rand.Intn(300)+500) * time.Millisecond
-	DPrintf(rf.me, cmpTicker, "Randomly jitter(%v) election timeout", timeout)
+	rf.Debug("Randomly jitter(%v) election timeout", timeout)
 	rf.electionTimeout = timeout
 }
 
@@ -133,7 +135,7 @@ func (rf *Raft) checkTerm(serverId ServerId, term Term) ServerStateMachine {
 		return rf.serverStateMachine
 	}
 
-	DPrintf(rf.me, cmpTerm, "@T%d < S%d@T%d. Converting to follower.", rf.currentTerm, serverId, term)
+	rf.Debug("@T%d < S%d@T%d. Converting to follower.", rf.currentTerm, serverId, term)
 	rf.currentTerm = term
 	rf.votedFor = -1
 	rf.persist()
@@ -154,7 +156,7 @@ func (rf *Raft) persist() {
 	rf.log.save(e)
 	data := w.Bytes()
 
-	DPrintf(rf.me, cmpPersist, "SaveStateAndSnapshot(CT=%d, VF=%d, D=len(%d), S=len(%d))",
+	rf.Debug("SaveStateAndSnapshot(CT=%d, VF=%d, D=len(%d), S=len(%d))",
 		rf.currentTerm, rf.votedFor, len(data), len(rf.snapshot))
 	rf.persister.SaveStateAndSnapshot(data, rf.snapshot)
 }
@@ -184,7 +186,7 @@ func (rf *Raft) readPersist(data []byte) {
 
 	rf.currentTerm = savedCurrentTerm
 	rf.votedFor = savedVotedFor
-	DPrintf(rf.me, cmpPersist, "loadingState(CT=%d, VF=%d)", rf.currentTerm, rf.votedFor)
+	rf.Debug("loadingState(CT=%d, VF=%d)", rf.currentTerm, rf.votedFor)
 
 	if err := rf.log.load(d); err != nil {
 		panic(err)
@@ -200,7 +202,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	DPrintf(rf.me, cmpRPC, "<=-= S%d Receive RequestVote(%v)", args.CandidateId, args)
+	rf.Debug("<=-= S%d Receive RequestVote(%v)", args.CandidateId, args)
 	rf.serverStateMachine = rf.
 		checkTerm(args.CandidateId, args.Term).
 		processIncomingRequestVote(args, reply)
@@ -211,12 +213,12 @@ func (rf *Raft) dispatchRequestVoteResponse(peer *Peer, args *RequestVoteArgs, r
 	defer rf.mu.Unlock()
 
 	if args.Term != rf.currentTerm {
-		DPrintf(rf.me, cmpRPC, "<=~= S%d Old Response to RequestVote(%v) -> (%v). CT=%d. Dropping.",
+		rf.Debug("<=~= S%d Old Response to RequestVote(%v) -> (%v). CT=%d. Dropping.",
 			peer.serverId, args, reply, rf.currentTerm)
 		return
 	}
 
-	DPrintf(rf.me, cmpRPC, "<=~= S%d Response to RequestVote(%v) -> (%v)", peer.serverId, args, reply)
+	rf.Debug("<=~= S%d Response to RequestVote(%v) -> (%v)", peer.serverId, args, reply)
 	rf.serverStateMachine = rf.
 		checkTerm(peer.serverId, reply.Term).
 		processRequestVoteResponse(peer.serverId, args, reply)
@@ -226,7 +228,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	DPrintf(rf.me, cmpRPC, "<=-= S%d Receive AppendEntries(%v)", args.LeaderId, args)
+	rf.Debug("<=-= S%d Receive AppendEntries(%v)", args.LeaderId, args)
 	rf.serverStateMachine = rf.
 		checkTerm(args.LeaderId, args.Term).
 		processIncomingAppendEntries(args, reply)
@@ -237,12 +239,12 @@ func (rf *Raft) dispatchAppendEntriesResponse(peer *Peer, args *AppendEntriesArg
 	defer rf.mu.Unlock()
 
 	if args.Term != rf.currentTerm {
-		DPrintf(rf.me, cmpRPC, "<=~= S%d Old Response to AppendEntries(%v) -> (%v). CT=%d. Dropping.",
+		rf.Debug("<=~= S%d Old Response to AppendEntries(%v) -> (%v). CT=%d. Dropping.",
 			peer.serverId, args, reply, rf.currentTerm)
 		return
 	}
 
-	DPrintf(rf.me, cmpRPC, "<=~= S%d Response to AppendEntries(%v) -> (%v)", peer.serverId, args, reply)
+	rf.Debug("<=~= S%d Response to AppendEntries(%v) -> (%v)", peer.serverId, args, reply)
 	rf.serverStateMachine = rf.
 		checkTerm(peer.serverId, reply.Term).
 		processAppendEntriesResponse(peer.serverId, args, reply)
@@ -252,7 +254,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	DPrintf(rf.me, cmpRPC, "<=-= S%d Receive InstallSnapshot(%v)", args.LeaderId, args)
+	rf.Debug("<=-= S%d Receive InstallSnapshot(%v)", args.LeaderId, args)
 	rf.serverStateMachine = rf.
 		checkTerm(args.LeaderId, args.Term).
 		processIncomingInstallSnapshot(args, reply)
@@ -263,12 +265,12 @@ func (rf *Raft) dispatchInstallSnapshotResponse(peer *Peer, args *InstallSnapsho
 	defer rf.mu.Unlock()
 
 	if args.Term != rf.currentTerm {
-		DPrintf(rf.me, cmpRPC, "<=~= S%d Old Response to InstallSnapshot(%v) -> (%v). CT=%d. Dropping.",
+		rf.Debug("<=~= S%d Old Response to InstallSnapshot(%v) -> (%v). CT=%d. Dropping.",
 			peer.serverId, args, reply, rf.currentTerm)
 		return
 	}
 
-	DPrintf(rf.me, cmpRPC, "<=~= S%d Response to InstallSnapshot(%v) -> (%v)", peer.serverId, args, reply)
+	rf.Debug("<=~= S%d Response to InstallSnapshot(%v) -> (%v)", peer.serverId, args, reply)
 	rf.serverStateMachine = rf.
 		checkTerm(peer.serverId, reply.Term).
 		processInstallSnapshotResponse(peer.serverId, args, reply)
@@ -279,17 +281,17 @@ func (rf *Raft) applyLog() {
 	defer rf.mu.Unlock()
 
 	if rf.commitIndex <= rf.lastApplied {
-		DPrintf(rf.me, cmpCommit, "applyLog appears to be called after logs have been applied")
+		rf.Debug("applyLog appears to be called after logs have been applied")
 		return
 	}
 
 	if rf.committing > 0 {
-		DPrintf(rf.me, cmpCommit, "Already actively commit %d")
+		rf.Debug("Already actively commit %d")
 		return
 	}
 
 	index := rf.lastApplied + 1
-	DPrintf(rf.me, cmpCommit, "applying log index %d", index)
+	rf.Debug("applying log index %d", index)
 	rf.committing = index
 	entry := rf.log.getEntryAt(index)
 	msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: int(entry.Index)}
@@ -304,7 +306,7 @@ func (rf *Raft) applyLog() {
 		rf.lastApplied = rf.committing
 		rf.committing = 0
 		if rf.lastApplied < rf.commitIndex {
-			DPrintf(rf.me, cmpCommit, "More logs to apply - calling self")
+			rf.Debug("More logs to apply - calling self")
 			go rf.applyLog()
 		}
 	}(rf, msg)
@@ -327,6 +329,10 @@ type ApplyMsg struct {
 	SnapshotIndex int
 }
 
+func (a ApplyMsg) String() string {
+	return fmt.Sprintf("command=%v, I=%d, C=%v", a.CommandValid, a.CommandIndex, a.Command)
+}
+
 //
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next Command to be appended to Raft's log. if this
@@ -347,7 +353,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 
 	isLeader := rf.isLeader()
 	if !isLeader {
-		// DPrintf(rf.me, cmpClient, "Not leader - rejecting Command(%v)", Command)
+		// logger.DPrintf(rf.me, cmpClient, "Not leader - rejecting Command(%v)", Command)
 		return 0, 0, isLeader
 	}
 

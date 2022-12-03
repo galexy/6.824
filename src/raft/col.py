@@ -7,25 +7,15 @@ from rich.highlighter import Highlighter
 import argparse
 
 
-# class KeywordHighlighter(Highlighter):
-#     def __init__(self, pattern):
-#         self.pattern = pattern
-#
-#     def highlight(self, text):
-#         for m in re.finditer(self.pattern, text._text[0]):
-#             index = m.start()
-#             text.stylize(f"magenta", index, index+len(self.pattern))
-
-
 def process_lines(input, column_patterns, skip, keywords):
+    column_patterns = column_patterns or []
+
     console = Console(force_terminal=True)
     width = console.size.width
     n_columns = len(column_patterns) + 1
     col_width = int(width / n_columns)
 
     with console.pager(styles=True):
-#         highlighter = KeywordHighlighter(keywords[0])
-
         for line in input:
             parts = line.strip().split(" ")
             prefix, message = " ".join(parts[:skip]), " ".join(parts[skip:])
@@ -41,7 +31,6 @@ def process_lines(input, column_patterns, skip, keywords):
             if not matched:
                 cols[0] = cols[0] + message
 
-#             cols = [highlighter(col) for col in cols]
             console.print(Columns(cols, width=col_width-1, equal=False, expand=True))
 
 if __name__ == '__main__':

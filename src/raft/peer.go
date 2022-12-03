@@ -14,9 +14,9 @@ func (p *Peer) callRequestVote(term Term, candidate ServerId, lastLogIndex LogIn
 	args := &RequestVoteArgs{Term: term, CandidateId: candidate, LastLogIndex: lastLogIndex, LastLogTerm: lastLogTerm}
 	reply := &RequestVoteReply{}
 
-	DPrintf(p.raft.me, cmpRPC, "=-=> S%d Send RequestVote(%v)", p.serverId, args)
+	p.raft.Debug("=-=> S%d Send RequestVote(%v)", p.serverId, args)
 	if !p.endPoint.Call("Raft.RequestVote", args, reply) {
-		DPrintf(p.raft.me, cmpRPC, "=/=> S%d Failed RequestVote()", p.serverId)
+		p.raft.Debug("=/=> S%d Failed RequestVote()", p.serverId)
 		return
 	}
 
@@ -36,9 +36,9 @@ func (p *Peer) callAppendEntries(leaderId ServerId, term Term, prevLogIndex LogI
 	}
 	reply := &AppendEntriesReply{}
 
-	DPrintf(p.raft.me, cmpRPC, "=-=> S%d Send AppendEntries(%v)", p.serverId, args)
+	p.raft.Debug("=-=> S%d Send AppendEntries(%v)", p.serverId, args)
 	if !p.endPoint.Call("Raft.AppendEntries", args, reply) {
-		DPrintf(p.raft.me, cmpRPC, "=/=> S%d Failed AppendEntries()", p.serverId)
+		p.raft.Debug("=/=> S%d Failed AppendEntries()", p.serverId)
 		return
 	}
 
@@ -57,9 +57,9 @@ func (p *Peer) callInstallSnapshot(leaderId ServerId, term Term,
 	}
 	reply := &InstallSnapshotReply{}
 
-	DPrintf(p.raft.me, cmpRPC, "=-=> S%d Send InstallSnapshot(%v)", p.serverId, args)
+	p.raft.Debug("=-=> S%d Send InstallSnapshot(%v)", p.serverId, args)
 	if !p.endPoint.Call("Raft.InstallSnapshot", args, reply) {
-		DPrintf(p.raft.me, cmpRPC, "=/=> S%d Failed InstallSnapshot()", p.serverId)
+		p.raft.Debug("=/=> S%d Failed InstallSnapshot()", p.serverId)
 		return
 	}
 

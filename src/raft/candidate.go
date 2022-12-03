@@ -1,6 +1,7 @@
 package raft
 
 import "fmt"
+import "6.824/logger"
 
 type RequestVoteArgs struct {
 	Term         Term     // Candidate's Term
@@ -28,6 +29,11 @@ type Candidate struct {
 	campaigns int
 }
 
+func (c *Candidate) Debug(format string, a ...interface{}) {
+	prefix := fmt.Sprintf("[S%d][%v] S%d ", c.rf.me, cmpCandidate, c.rf.me)
+	logger.DPrintf(prefix+format, a...)
+}
+
 func (c *Candidate) isLeader() bool {
 	return false
 }
@@ -49,7 +55,7 @@ func (c *Candidate) startElection() {
 
 	c.rf.persist()
 
-	DPrintf(c.rf.me, cmpCandidate, "running a campaign(T=%d)", c.rf.currentTerm)
+	c.Debug("running a campaign(T=%d)", c.rf.currentTerm)
 	for peerId, peer := range c.rf.peers {
 		peerId := ServerId(peerId)
 		if peerId == c.rf.me {
@@ -66,13 +72,13 @@ func (c *Candidate) processTick() {
 }
 
 func (c *Candidate) processElectionTimeout() ServerStateMachine {
-	DPrintf(c.rf.me, cmpCandidate, "Election Timeout @ T%d. Starting new election.", c.rf.currentTerm)
+	c.Debug("Election Timeout @ T%d. Starting new election.", c.rf.currentTerm)
 	c.startElection()
 	return c
 }
 
 func (c *Candidate) processIncomingRequestVote(args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
-	DPrintf(c.rf.me, cmpCandidate, "Denying RequestVote(S%d, T=%d). Trying to win election.",
+	c.Debug("Denying RequestVote(S%d, T=%d). Trying to win election.",
 		args.CandidateId, args.Term)
 
 	reply.Term = c.rf.currentTerm
@@ -83,7 +89,7 @@ func (c *Candidate) processIncomingRequestVote(args *RequestVoteArgs, reply *Req
 
 func (c *Candidate) processRequestVoteResponse(serverId ServerId, args *RequestVoteArgs, reply *RequestVoteReply) ServerStateMachine {
 	if args.Term < c.rf.currentTerm {
-		DPrintf(c.rf.me, cmpCandidate, "Received stale vote S%d @T%d < S%d@T%d. Ignoring.",
+		c.Debug("Received stale vote S%d @T%d < S%d@T%d. Ignoring.",
 			args.CandidateId, args.Term, c.rf.me, c.rf.currentTerm)
 		return c
 	}
@@ -94,11 +100,11 @@ func (c *Candidate) processRequestVoteResponse(serverId ServerId, args *RequestV
 	}
 
 	if !reply.VoteGranted {
-		DPrintf(c.rf.me, cmpCandidate, "Denied vote from S%d@T%d", serverId, args.Term)
+		c.Debug("Denied vote from S%d@T%d", serverId, args.Term)
 		return c
 	}
 
-	DPrintf(c.rf.me, cmpCandidate, "Received vote from S%d@T%d", serverId, args.Term)
+	c.Debug("Received vote from S%d@T%d", serverId, args.Term)
 
 	c.votes[serverId] = true
 	var totalVotes = 0
@@ -109,7 +115,7 @@ func (c *Candidate) processRequestVoteResponse(serverId ServerId, args *RequestV
 	}
 
 	if totalVotes > len(c.votes)/2 {
-		DPrintf(c.rf.me, cmpCandidate, "Received majority of votes. Promoting to Leader")
+		c.Debug("Received majority of votes. Promoting to Leader")
 		leader := MakeLeader(c.rf)
 
 		return leader
@@ -119,7 +125,7 @@ func (c *Candidate) processRequestVoteResponse(serverId ServerId, args *RequestV
 }
 
 func (c *Candidate) processIncomingAppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) ServerStateMachine {
-	DPrintf(c.rf.me, cmpCandidate, "AppendEntries received from new Leader L%d@T%d. Converting to follower.",
+	c.Debug("AppendEntries received from new Leader L%d@T%d. Converting to follower.",
 		args.LeaderId, args.Term)
 
 	f := &Follower{rf: c.rf}
@@ -132,19 +138,19 @@ func (c *Candidate) processAppendEntriesResponse(
 	_ *AppendEntriesArgs,
 	_ *AppendEntriesReply) ServerStateMachine {
 
-	DPrintf(c.rf.me, cmpCandidate, "Received Stale AppendEntries() Response. Ignoring.")
+	c.Debug("Received Stale AppendEntries() Response. Ignoring.")
 	return c
 }
 
 func (c *Candidate) processIncomingInstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
-	DPrintf(c.rf.me, cmpCandidate, "Received InstallSnapshot() Request. Not processing.")
+	c.Debug("Received InstallSnapshot() Request. Not processing.")
 	reply.Term = c.rf.currentTerm
 
 	return c
 }
 
 func (c *Candidate) processInstallSnapshotResponse(serverId ServerId, args *InstallSnapshotArgs, reply *InstallSnapshotReply) ServerStateMachine {
-	DPrintf(c.rf.me, cmpCandidate, "Received Stale InstallSnapshot() Response. Not processing.")
+	c.Debug("Received Stale InstallSnapshot() Response. Not processing.")
 
 	return c
 }
