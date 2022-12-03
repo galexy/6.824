@@ -138,6 +138,7 @@ func (l *LogImpl) insertReplicatedEntries(entries []*LogEntry) {
 			existingEntry := l.getEntryAt(entry.Index)
 			if existingEntry.Term == entry.Term {
 				l.Debug("Already have %d@T%d, skipping.", entry.Index, entry.Term)
+				continue
 			}
 
 			l.Debug("Conflict detected %d@T%d != replicated entry %d@T%d. Truncating log.",
