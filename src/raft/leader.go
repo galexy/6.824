@@ -324,7 +324,12 @@ func (l *Leader) updateCommitIndex() (updated bool) {
 
 func (l *Leader) processCommand(command interface{}) (index LogIndex, term Term) {
 	newEntry, _ := l.rf.log.append(l.rf.currentTerm, command)
-	l.Debug("enqueue(Command=%v,I=%d,T%d)",
-		command, newEntry.Index, newEntry.Term)
+	l.Debug("enqueue(Command=%v,I=%d,T%d)", command, newEntry.Index, newEntry.Term)
+
+	now := time.Now()
+	for i, _ := range l.nextHeartbeat {
+		l.nextHeartbeat[i] = now
+	}
+
 	return newEntry.Index, newEntry.Term
 }
