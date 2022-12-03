@@ -3,47 +3,107 @@ package kvraft
 import (
 	"6.824/labgob"
 	"6.824/labrpc"
+	"6.824/logger"
 	"6.824/raft"
-	"log"
+	"fmt"
 	"sync"
 	"sync/atomic"
 )
 
-const Debug = false
+type SeqId uint64
 
-func DPrintf(format string, a ...interface{}) (n int, err error) {
-	if Debug {
-		log.Printf(format, a...)
-	}
-	return
-}
+type OpCode int
 
+const (
+	OpPut OpCode = iota
+	OpAppend
+	OpGet
+	OpKill
+)
 
 type Op struct {
-	// Your definitions here.
-	// Field names must start with capital letters,
-	// otherwise RPC will break.
+	Id       SeqId
+	OpCode   OpCode
+	Key      string
+	Value    string
+	ServerId raft.ServerId
+}
+
+type Resp struct {
+	Id    SeqId
+	err   Err
+	value string
+}
+
+func (r Resp) String() string {
+	return fmt.Sprintf("seq=%d, v=%s, e=%s", r.Id, r.value, r.err)
+}
+
+type Command struct {
+	Op
+	respCh chan Resp
+}
+
+func (c Command) String() string {
+	code := ""
+	switch c.OpCode {
+	case OpPut:
+		code = "put"
+	case OpAppend:
+		code = "append"
+	case OpGet:
+		code = "get"
+	}
+	return fmt.Sprintf("ID=%d, C=%v, K=%v, V=%v", c.Id, code, c.Key, c.Value)
 }
 
 type KVServer struct {
-	mu      sync.Mutex
-	me      int
-	rf      *raft.Raft
-	applyCh chan raft.ApplyMsg
-	dead    int32 // set by Kill()
+	mu           sync.Mutex
+	me           raft.ServerId
+	rf           *raft.Raft
+	applyCh      chan raft.ApplyMsg
+	dead         int32 // set by Kill()
+	maxraftstate int   // snapshot if log grows this big
 
-	maxraftstate int // snapshot if log grows this big
-
-	// Your definitions here.
+	smChannel    chan Command // Channel to queue commands
+	respChannels map[SeqId]chan Resp
+	kvStore      map[string]string
 }
 
+func (kv *KVServer) Debug(format string, a ...interface{}) {
+	prefix := fmt.Sprintf("[S%d][%v] S%d ", kv.me, "KVSERV", kv.me)
+	logger.DPrintf(prefix+format, a...)
+}
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
-	// Your code here.
+	op := Op{Id: SeqId(args.SeqId), OpCode: OpGet, Key: args.Key}
+	respChn := make(chan Resp)
+	cmd := Command{Op: op, respCh: respChn}
+
+	kv.Debug("SM <- Get(seq=%d, k=%s)", args.SeqId, args.Key)
+	kv.smChannel <- cmd
+	resp := <-respChn
+	kv.Debug("SM -> Get(seq=%d, k=%s) -> %v", args.SeqId, args.Key, resp)
+
+	reply.Err = resp.err
+	reply.Value = resp.value
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-	// Your code here.
+	opCode := OpPut
+	if args.Op == "Append" {
+		opCode = OpAppend
+	}
+
+	op := Op{Id: SeqId(args.SeqId), OpCode: opCode, Key: args.Key, Value: args.Value}
+	respChn := make(chan Resp)
+	cmd := Command{Op: op, respCh: respChn}
+
+	kv.Debug("SM <- %v(seq=%d, k=%s)", args.Op, args.SeqId, args.Key)
+	kv.smChannel <- cmd
+	resp := <-respChn
+	kv.Debug("SM -> %v(seq=%d, k=%s, v=%s) -> %v", args.Op, args.Key, args.SeqId, resp)
+	reply.Err = resp.err
 }
 
 //
@@ -87,15 +147,83 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	labgob.Register(Op{})
 
 	kv := new(KVServer)
-	kv.me = me
+	kv.me = raft.ServerId(me)
 	kv.maxraftstate = maxraftstate
 
 	// You may need initialization code here.
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
+	kv.smChannel = make(chan Command)
+	kv.respChannels = make(map[SeqId]chan Resp)
+	kv.kvStore = make(map[string]string)
 
 	// You may need initialization code here.
+	go kv.process()
 
 	return kv
+}
+
+func (kv *KVServer) process() {
+	defer func() {
+		panic("FAIL")
+	}()
+
+	for {
+		kv.Debug("Waiting for command")
+		select {
+		case command := <-kv.smChannel:
+			kv.Debug("command(%v) <- SM channel", command)
+			op := command.Op
+			op.ServerId = kv.me
+			_, _, isLeader := kv.rf.Start(op)
+
+			// If the current server isn't leader, respond immediately
+			if !isLeader {
+				command.respCh <- Resp{Id: command.Id, err: "Not Leader"}
+			} else {
+				kv.respChannels[command.Id] = command.respCh
+			}
+
+		case message := <-kv.applyCh:
+			kv.Debug("Received message from Raft: %v", message)
+
+			var op Op
+			var ok bool
+			if op, ok = message.Command.(Op); !ok {
+				panic("Could not cast command back")
+			}
+
+			// Get the response channel if the current server made the request while leader
+			// It's possible that it has lost leadership in between however
+			respCh, ok := kv.respChannels[op.Id]
+			stillLeader := ok && op.ServerId == kv.me
+
+			if ok && !stillLeader {
+				respCh <- Resp{Id: op.Id, err: "Not Leader"}
+			}
+
+			switch op.OpCode {
+			case OpPut:
+				kv.kvStore[op.Key] = op.Value
+				if stillLeader {
+					respCh <- Resp{Id: op.Id}
+				}
+			case OpAppend:
+				kv.kvStore[op.Key] += op.Value
+				if stillLeader {
+					respCh <- Resp{Id: op.Id}
+				}
+			case OpGet:
+				val := kv.kvStore[op.Key]
+				if stillLeader {
+					respCh <- Resp{Id: op.Id, value: val}
+				}
+			}
+
+			if ok {
+				delete(kv.respChannels, op.Id)
+			}
+		}
+	}
 }
