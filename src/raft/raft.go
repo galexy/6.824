@@ -294,7 +294,12 @@ func (rf *Raft) applyLog() {
 	rf.Debug("applying log index %d", index)
 	rf.committing = index
 	entry := rf.log.getEntryAt(index)
-	msg := ApplyMsg{CommandValid: true, Command: entry.Command, CommandIndex: int(entry.Index)}
+	msg := ApplyMsg{
+		CommandValid: true,
+		Command:      entry.Command,
+		CommandIndex: int(entry.Index),
+		CommandTerm:  int(entry.Term),
+	}
 
 	go func(rf *Raft, msg ApplyMsg) {
 		// Don't lock here since applyChn can block. Lock after channel as received message
@@ -321,6 +326,7 @@ type ApplyMsg struct {
 	CommandValid bool
 	Command      interface{}
 	CommandIndex int
+	CommandTerm  int
 
 	// For 2D:
 	SnapshotValid bool

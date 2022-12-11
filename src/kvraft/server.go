@@ -67,9 +67,10 @@ type KVServer struct {
 	maxraftstate int   // snapshot if log grows this big
 
 	smChannel      chan Command // Channel to queue commands
-	respChannels   map[SeqId]chan Resp
+	pendingResp    map[SeqId]chan Resp
 	kvStore        map[string]string
 	lastClientResp map[int64]Resp
+	leaderTerm     int
 }
 
 func (kv *KVServer) Debug(format string, a ...interface{}) {
@@ -157,7 +158,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.smChannel = make(chan Command)
-	kv.respChannels = make(map[SeqId]chan Resp)
+	kv.pendingResp = make(map[SeqId]chan Resp)
 	kv.kvStore = make(map[string]string)
 	kv.lastClientResp = make(map[int64]Resp)
 
@@ -187,61 +188,78 @@ func (kv *KVServer) process() {
 
 			op := command.Op
 			op.ServerId = kv.me
-			_, _, isLeader := kv.rf.Start(op)
+			_, term, isLeader := kv.rf.Start(op)
 
 			// If the current server isn't leader, respond immediately
 			if !isLeader {
 				command.respCh <- Resp{Id: command.Id, err: "Not Leader"}
 			} else {
-				kv.respChannels[command.Id] = command.respCh
+				kv.leaderTerm = term
+				kv.pendingResp[command.Id] = command.respCh
 			}
 
 		case message := <-kv.applyCh:
+			if !message.CommandValid {
+				// TODO: Apply snapshot
+			}
+
 			kv.Debug("Received message from Raft: %v", message)
 
-			var op Op
-			var ok bool
-			if op, ok = message.Command.(Op); !ok {
+			op, ok := message.Command.(Op)
+			if !ok {
 				panic("Could not cast command back")
 			}
 
-			// Get the response channel if the current server made the request while leader
-			// It's possible that it has lost leadership in between however
-			respCh, hasChannel := kv.respChannels[op.Id]
-			stillLeader := op.ServerId == kv.me
-
-			if hasChannel && !stillLeader {
-				respCh <- Resp{Id: op.Id, err: "Not Leader"}
-				continue
-			}
-
-			if prevResp, ok := kv.lastClientResp[op.ClientId]; ok && prevResp.Id == op.Id {
-				kv.Debug("Repeated of previous command. Repeating response and not applying command.")
-				respCh <- prevResp
-				continue
-			}
-
-			var resp Resp
-			switch op.OpCode {
-			case OpPut:
-				kv.kvStore[op.Key] = op.Value
-				resp = Resp{Id: op.Id}
-			case OpAppend:
-				kv.kvStore[op.Key] += op.Value
-				resp = Resp{Id: op.Id}
-			case OpGet:
-				val := kv.kvStore[op.Key]
-				resp = Resp{Id: op.Id, value: val}
-			}
-
-			if hasChannel && stillLeader {
-				respCh <- resp
-			}
+			resp := kv.processMessage(op)
 			kv.lastClientResp[op.ClientId] = resp
 
-			if hasChannel {
-				delete(kv.respChannels, op.Id)
+			respCh, hasChannel := kv.pendingResp[op.Id]
+			if message.CommandTerm > kv.leaderTerm {
+				// The server lost the leadership between Start and Apply.
+				// Tell all pending clients that it is no longer the leader
+				kv.cancelAllResponses()
+				continue
+			} else if message.CommandTerm < kv.leaderTerm {
+				// This was a command that was received from a previous leader
+				// there should not be a pending resp
+				if hasChannel {
+					panic("Not expecting to have a pending response for command sent by other leader")
+				}
+				continue
 			}
+
+			// Get the pending response channel. At this point, the current
+			// server should be the leader and the command was started during
+			// the current term
+			if !hasChannel {
+				panic("Leader should still see pending response!")
+			}
+
+			respCh <- resp
+			delete(kv.pendingResp, op.Id)
 		}
 	}
+}
+
+func (kv *KVServer) processMessage(op Op) Resp {
+	switch op.OpCode {
+	case OpPut:
+		kv.kvStore[op.Key] = op.Value
+		return Resp{Id: op.Id}
+	case OpAppend:
+		kv.kvStore[op.Key] += op.Value
+		return Resp{Id: op.Id}
+	case OpGet:
+		val := kv.kvStore[op.Key]
+		return Resp{Id: op.Id, value: val}
+	}
+	panic("Shouldn't get here")
+}
+
+func (kv *KVServer) cancelAllResponses() {
+	// we need to tell all pending clients that we are no longer the leader
+	for id, respCh := range kv.pendingResp {
+		respCh <- Resp{Id: id, err: "Not Leader"}
+	}
+	kv.pendingResp = make(map[SeqId]chan Resp)
 }
