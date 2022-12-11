@@ -12,25 +12,31 @@ import "math/big"
 type Clerk struct {
 	servers    []*labrpc.ClientEnd
 	lastLeader int64
+	clientId   int64
 }
 
-func newSequence() SeqId {
+func randId() int64 {
 	max := big.NewInt(int64(1) << 62)
 	bigx, _ := rand.Int(rand.Reader, max)
 	x := bigx.Int64()
-	return SeqId(x)
+	return x
 }
 
 func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
-	// You'll have to add code here.
+	ck.clientId = randId()
 	return ck
 }
 
-func (kv *Clerk) Debug(format string, a ...interface{}) {
-	prefix := fmt.Sprintf("[CL][%v] ", "KVCLNT")
+func (ck *Clerk) Debug(format string, a ...interface{}) {
+	prefix := fmt.Sprintf("[C%d][KVCLNT] ", ck.clientId)
 	logger.DPrintf(prefix+format, a...)
+}
+
+func (ck *Clerk) nextSeqId() SeqId {
+	newSeqId := SeqId(randId())
+	return SeqId(newSeqId)
 }
 
 //
@@ -46,18 +52,20 @@ func (kv *Clerk) Debug(format string, a ...interface{}) {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) Get(key string) string {
-	ck.Debug("Get(k=%v)", key)
+	nextId := ck.nextSeqId()
+
+	ck.Debug("Get(k=%v, seq=%d)", key, nextId)
 	lastLeaderIndex := atomic.LoadInt64(&ck.lastLeader)
 	lastLeader := ck.servers[lastLeaderIndex]
 
-	isLeader, res := ck.tryGet(lastLeaderIndex, lastLeader, key)
+	isLeader, res := ck.tryGet(lastLeaderIndex, lastLeader, key, nextId)
 	if isLeader {
 		return res
 	}
 
 	for {
 		for i, server := range ck.servers {
-			isLeader, res := ck.tryGet(int64(i), server, key)
+			isLeader, res := ck.tryGet(int64(i), server, key, nextId)
 			if isLeader {
 				atomic.StoreInt64(&ck.lastLeader, int64(i))
 				return res
@@ -66,8 +74,8 @@ func (ck *Clerk) Get(key string) string {
 	}
 }
 
-func (ck *Clerk) tryGet(serverId int64, server *labrpc.ClientEnd, key string) (isLeader bool, val string) {
-	args := GetArgs{SeqId: newSequence(), Key: key}
+func (ck *Clerk) tryGet(serverId int64, server *labrpc.ClientEnd, key string, nextId SeqId) (isLeader bool, val string) {
+	args := GetArgs{ClientId: ck.clientId, SeqId: nextId, Key: key}
 	reply := GetReply{}
 	if ok := server.Call("KVServer.Get", &args, &reply); !ok {
 		ck.Debug("S%d -> KVServer.Get(%v) failed", serverId, args.Key)
@@ -93,19 +101,20 @@ func (ck *Clerk) tryGet(serverId int64, server *labrpc.ClientEnd, key string) (i
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
-	ck.Debug("PutAppend(k=%v, v=%v)", key, value)
+	nextId := ck.nextSeqId()
+	ck.Debug("PutAppend(k=%v, v=%v, seq=%d)", key, value, nextId)
 
 	lastLeaderIndex := atomic.LoadInt64(&ck.lastLeader)
 	lastLeader := ck.servers[lastLeaderIndex]
 
-	isLeader := ck.tryPutAppend(lastLeaderIndex, lastLeader, key, value, op)
+	isLeader := ck.tryPutAppend(lastLeaderIndex, lastLeader, key, value, op, nextId)
 	if isLeader {
 		return
 	}
 
 	for {
 		for i, server := range ck.servers {
-			isLeader := ck.tryPutAppend(int64(i), server, key, value, op)
+			isLeader := ck.tryPutAppend(int64(i), server, key, value, op, nextId)
 			if isLeader {
 				atomic.StoreInt64(&ck.lastLeader, int64(i))
 				return
@@ -114,8 +123,8 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 	}
 }
 
-func (ck *Clerk) tryPutAppend(serverId int64, server *labrpc.ClientEnd, key string, value string, op string) bool {
-	args := PutAppendArgs{SeqId: newSequence(), Key: key, Value: value, Op: op}
+func (ck *Clerk) tryPutAppend(serverId int64, server *labrpc.ClientEnd, key string, value string, op string, nextId SeqId) bool {
+	args := PutAppendArgs{ClientId: ck.clientId, SeqId: nextId, Key: key, Value: value, Op: op}
 	reply := PutAppendReply{}
 
 	if ok := server.Call("KVServer.PutAppend", &args, &reply); !ok {

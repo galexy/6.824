@@ -22,6 +22,7 @@ const (
 )
 
 type Op struct {
+	ClientId int64
 	Id       SeqId
 	OpCode   OpCode
 	Key      string
@@ -65,9 +66,10 @@ type KVServer struct {
 	dead         int32 // set by Kill()
 	maxraftstate int   // snapshot if log grows this big
 
-	smChannel    chan Command // Channel to queue commands
-	respChannels map[SeqId]chan Resp
-	kvStore      map[string]string
+	smChannel      chan Command // Channel to queue commands
+	respChannels   map[SeqId]chan Resp
+	kvStore        map[string]string
+	lastClientResp map[int64]Resp
 }
 
 func (kv *KVServer) Debug(format string, a ...interface{}) {
@@ -76,14 +78,14 @@ func (kv *KVServer) Debug(format string, a ...interface{}) {
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
-	op := Op{Id: SeqId(args.SeqId), OpCode: OpGet, Key: args.Key}
+	op := Op{ClientId: args.ClientId, Id: args.SeqId, OpCode: OpGet, Key: args.Key}
 	respChn := make(chan Resp)
 	cmd := Command{Op: op, respCh: respChn}
 
-	kv.Debug("SM <- Get(seq=%d, k=%s)", args.SeqId, args.Key)
+	kv.Debug("SM <- Get(%v)", args)
 	kv.smChannel <- cmd
 	resp := <-respChn
-	kv.Debug("SM -> Get(seq=%d, k=%s) -> %v", args.SeqId, args.Key, resp)
+	kv.Debug("SM -> Get(%v) -> %v", args, resp)
 
 	reply.Err = resp.err
 	reply.Value = resp.value
@@ -95,14 +97,14 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		opCode = OpAppend
 	}
 
-	op := Op{Id: SeqId(args.SeqId), OpCode: opCode, Key: args.Key, Value: args.Value}
+	op := Op{ClientId: args.ClientId, Id: SeqId(args.SeqId), OpCode: opCode, Key: args.Key, Value: args.Value}
 	respChn := make(chan Resp)
 	cmd := Command{Op: op, respCh: respChn}
 
-	kv.Debug("SM <- %v(seq=%d, k=%s)", args.Op, args.SeqId, args.Key)
+	kv.Debug("SM <- %v(%v)", args.Op, args)
 	kv.smChannel <- cmd
 	resp := <-respChn
-	kv.Debug("SM -> %v(seq=%d, k=%s, v=%s) -> %v", args.Op, args.Key, args.SeqId, resp)
+	kv.Debug("SM -> %v(%v) -> %v", args.Op, args, resp)
 	reply.Err = resp.err
 }
 
@@ -157,6 +159,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.smChannel = make(chan Command)
 	kv.respChannels = make(map[SeqId]chan Resp)
 	kv.kvStore = make(map[string]string)
+	kv.lastClientResp = make(map[int64]Resp)
 
 	// You may need initialization code here.
 	go kv.process()
@@ -174,6 +177,14 @@ func (kv *KVServer) process() {
 		select {
 		case command := <-kv.smChannel:
 			kv.Debug("command(%v) <- SM channel", command)
+
+			resp, ok := kv.lastClientResp[command.ClientId]
+			if ok && resp.Id == command.Id {
+				kv.Debug("Repeated of previous command. Repeating response.")
+				command.respCh <- resp
+				continue
+			}
+
 			op := command.Op
 			op.ServerId = kv.me
 			_, _, isLeader := kv.rf.Start(op)
@@ -196,32 +207,39 @@ func (kv *KVServer) process() {
 
 			// Get the response channel if the current server made the request while leader
 			// It's possible that it has lost leadership in between however
-			respCh, ok := kv.respChannels[op.Id]
-			stillLeader := ok && op.ServerId == kv.me
+			respCh, hasChannel := kv.respChannels[op.Id]
+			stillLeader := op.ServerId == kv.me
 
-			if ok && !stillLeader {
+			if hasChannel && !stillLeader {
 				respCh <- Resp{Id: op.Id, err: "Not Leader"}
+				continue
 			}
 
+			if prevResp, ok := kv.lastClientResp[op.ClientId]; ok && prevResp.Id == op.Id {
+				kv.Debug("Repeated of previous command. Repeating response and not applying command.")
+				respCh <- prevResp
+				continue
+			}
+
+			var resp Resp
 			switch op.OpCode {
 			case OpPut:
 				kv.kvStore[op.Key] = op.Value
-				if stillLeader {
-					respCh <- Resp{Id: op.Id}
-				}
+				resp = Resp{Id: op.Id}
 			case OpAppend:
 				kv.kvStore[op.Key] += op.Value
-				if stillLeader {
-					respCh <- Resp{Id: op.Id}
-				}
+				resp = Resp{Id: op.Id}
 			case OpGet:
 				val := kv.kvStore[op.Key]
-				if stillLeader {
-					respCh <- Resp{Id: op.Id, value: val}
-				}
+				resp = Resp{Id: op.Id, value: val}
 			}
 
-			if ok {
+			if hasChannel && stillLeader {
+				respCh <- resp
+			}
+			kv.lastClientResp[op.ClientId] = resp
+
+			if hasChannel {
 				delete(kv.respChannels, op.Id)
 			}
 		}

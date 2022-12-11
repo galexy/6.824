@@ -12,14 +12,15 @@ type Err string
 
 // Put or Append
 type PutAppendArgs struct {
-	SeqId SeqId
-	Key   string
-	Value string
-	Op    string // "Put" or "Append"
+	ClientId int64
+	SeqId    SeqId
+	Key      string
+	Value    string
+	Op       string // "Put" or "Append"
 }
 
 func (a PutAppendArgs) String() string {
-	return fmt.Sprintf("id= %d, op=%s, k=%s, v=%s", a.SeqId, a.Op, a.Key, a.Value)
+	return fmt.Sprintf("c=%d, id= %d, op=%s, k=%s, v=%s", a.ClientId, a.SeqId, a.Op, a.Key, a.Value)
 }
 
 type PutAppendReply struct {
@@ -31,12 +32,13 @@ func (r PutAppendReply) String() string {
 }
 
 type GetArgs struct {
-	SeqId SeqId
-	Key   string
+	ClientId int64
+	SeqId    SeqId
+	Key      string
 }
 
 func (a GetArgs) String() string {
-	return fmt.Sprintf("id= %d, k=%s", a.SeqId, a.Key)
+	return fmt.Sprintf("c=%d, id= %d, k=%s", a.ClientId, a.SeqId, a.Key)
 }
 
 type GetReply struct {
